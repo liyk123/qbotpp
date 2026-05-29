@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    {
+      "name": "drogon",
+      "features": [
+        "ctl",
+        "sqlite3",
+        "yaml"
+      ]
+    }
+  ]
+}
