@@ -146,16 +146,16 @@ static std::string& getGlobalSessionId()
     return sessionId;
 }
 
-static drogon::Task<drogon::HttpResponsePtr> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
+static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
 {
-    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com", drogon::app().getIOLoop(0));
+    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com", drogon::app().getIOLoop(2));
     auto req = drogon::HttpRequest::newCustomHttpRequest(data);
     req->setPath(path);
     req->setMethod(drogon::Post);
     req->addHeader("Authorization", "QQBot " + token);
-    auto resp = co_await client->sendRequestCoro(req);
-    SPDLOG_INFO(resp->getBody());
-    co_return resp;
+    auto& resp = co_await client->sendRequestCoro(req);
+    SPDLOG_INFO("{} {}",path,resp->getBody());
+    co_return nlohmann::json::parse(resp->getBody());
 }
 
 static void initEnv()
@@ -239,40 +239,40 @@ static nlohmann::json DispatchReady(const nlohmann::json& data)
     };
 }
 
-static drogon::Task<> SendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> SendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/users/{}/messages", openId);
-    co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<> SendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> SendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/groups/{}/messages", openId);
-    co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<> SendC2CFileAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> SendC2CFileAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/users/{}/files", openId);
-    co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<> SendGroupFileAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> SendGroupFileAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/groups/{}/files", openId);
-    co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<> DeleteGroupMessageAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> DeleteGroupMessageAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/groups/{}/messages/{}", openId, payload.get<std::string_view>());
-    co_await CallQBotApiAsync(path, {}, token);
+    co_return co_await CallQBotApiAsync(path, {}, token);
 }
 
-static drogon::Task<> DeleteC2CMessageAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> DeleteC2CMessageAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/users/{}/messages/{}", openId, payload.get<std::string_view>());
-    co_await CallQBotApiAsync(path, {}, token);
+    co_return co_await CallQBotApiAsync(path, {}, token);
 }
 
 static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
@@ -293,7 +293,7 @@ static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
         nlohmann::json payload;
         payload["markdown"]["content"] = data["d"]["content"];
         payload["msg_type"] = 2;
-        auto userOpenId = data["d"]["group_openid"];
+        auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
     }));
     return {};
@@ -305,7 +305,7 @@ static nlohmann::json DispatchGroupAtMessageCreate(const nlohmann::json& data)
         nlohmann::json payload;
         payload["markdown"]["content"] = data["d"]["content"];
         payload["msg_type"] = 2;
-        auto userOpenId = data["d"]["group_openid"];
+        auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
     }));
     return {};
