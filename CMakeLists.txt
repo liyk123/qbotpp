@@ -68,6 +68,10 @@ set(GIT_DATE "unknown")
 get_git_date_time(GIT_DATE)
 add_definitions(-DGIT_DATE="${GIT_DATE}")
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-DDEBUG)
+endif()
+
 add_definitions(-DPROJECT_NAME="${PROJECT_NAME}")
 
 add_executable(${PROJECT_NAME} ${FILE_LIST})
