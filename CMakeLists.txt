@@ -17,6 +17,7 @@ set(FILE_LIST
 )
 
 find_package(Drogon CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 
 macro(get_git_hash _git_hash)
@@ -73,6 +74,7 @@ add_executable(${PROJECT_NAME} ${FILE_LIST})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     PRIVATE Drogon::Drogon
+    PRIVATE nlohmann_json::nlohmann_json
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
