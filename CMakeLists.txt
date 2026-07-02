@@ -14,6 +14,7 @@ project (${PROJECT_NAME})
 
 set(FILE_LIST
     "main.cpp"
+    "onebot11.h"
 )
 
 find_package(Drogon CONFIG REQUIRED)

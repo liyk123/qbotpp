@@ -10,6 +10,7 @@ constexpr auto versionInfo = "Branch: " GIT_BRANCH "\nCommit: " GIT_VERSION "\nD
 constexpr auto LogPattern = "%m-%d %H:%M:%S.%e [%^%l%$] [thread:%t] [%s:%#] %v";
 constexpr auto TargetLocaleName = "zh_CN.UTF-8";
 constexpr auto C_LocaleName = "C";
+#define QBOT_TAG "\033[36mQBot\033[0m "
 
 using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
 using WSAsyncMessageHandler = std::function<drogon::Task<void>(std::string&&, const drogon::WebSocketClientPtr&, const drogon::WebSocketMessageType&)>;
@@ -43,9 +44,9 @@ enum class opcode : std::int32_t
 
 constexpr auto GROUP_AND_C2C_EVENT = 1U << 25 | 1U << 24;
 
-std::atomic<std::uint64_t> g_seq = 0;
+alignas(std::hardware_destructive_interference_size) std::atomic<std::uint64_t> g_seq = 0;
 
-std::atomic_flag g_needResume{};
+alignas(std::hardware_destructive_interference_size) std::atomic_flag g_needResume{};
 
 // FNV-1a 32位编译期哈希算法
 static constexpr uint32_t FNV1aHash(std::string_view sv)
@@ -148,14 +149,18 @@ static std::string& getGlobalSessionId()
 
 static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
 {
-    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com", drogon::app().getIOLoop(2));
+    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com");
     auto req = drogon::HttpRequest::newCustomHttpRequest(data);
     req->setPath(path);
-    req->setMethod(drogon::Post);
     req->addHeader("Authorization", "QQBot " + token);
     auto& resp = co_await client->sendRequestCoro(req);
-    SPDLOG_INFO("{} {}",path,resp->getBody());
-    co_return nlohmann::json::parse(resp->getBody());
+    SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), path, resp->body());
+    co_return nlohmann::json::parse(resp->body());
+}
+
+static void HttpLogger(const drogon::HttpRequestPtr& req, const drogon::HttpResponsePtr& resp)
+{
+    SPDLOG_INFO("{} {} {} status: {} bytes: {}", req->methodString(), req->path(), nlohmann::json(req->parameters()).dump(), (int)resp->statusCode(), resp->body().size());
 }
 
 static void initEnv()
@@ -177,47 +182,45 @@ static void initEnv()
 #else
         .setLogLevel(trantor::Logger::kInfo)
 #endif // DEBUG
-        .addListener("0.0.0.0", 8080)
+        .registerPostHandlingAdvice(HttpLogger)
         .setThreadNum(0);
     std::signal(SIGTERM, [](int) {
         drogon::app().getLoop()->runInLoop([] { drogon::app().quit(); }); 
     });
 }
 
-static void registerAppVersion()
+static void AppVersionHandler(const drogon::HttpRequestPtr& req, drogon::AdviceCallback&& callback)
 {
-    drogon::app().registerHandler("/", [](const drogon::HttpRequestPtr& req, drogon::AdviceCallback&& callback) {
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setPassThrough(true);
-        resp->setBody(versionInfo);
-        resp->setContentTypeCode(drogon::ContentType::CT_TEXT_HTML);
-        callback(resp);
-    }, { drogon::Get });
-}
+    auto resp = drogon::HttpResponse::newHttpResponse();
+    resp->setPassThrough(true);
+    resp->setBody(versionInfo);
+    resp->setContentTypeCode(drogon::ContentType::CT_TEXT_HTML);
+    callback(resp);
+};
 
 static drogon::Task<std::string> getAccessTokenAsync()
 {
     auto& config = drogon::app().getCustomConfig();
-    auto client = drogon::HttpClient::newHttpClient("https://bots.qq.com", drogon::app().getIOLoop(0));
+    auto client = drogon::HttpClient::newHttpClient("https://bots.qq.com");
     auto req = drogon::HttpRequest::newCustomHttpRequest(nlohmann::json{
         {"appId", config["appId"].asString()},
         {"clientSecret", config["clientSecret"].asString()}
     });
     req->setPath("/app/getAppAccessToken");
     auto resp = co_await client->sendRequestCoro(req);
-    SPDLOG_INFO(resp->getBody());
-    co_return nlohmann::json::parse(resp->getBody()).value("access_token", "");
+    SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), req->path(), resp->body());
+    co_return nlohmann::json::parse(resp->body()).value("access_token", "");
 }
 
 static drogon::Task<std::string> getGatewayAysnc(const std::string token)
 {
-    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com", drogon::app().getIOLoop(0));
+    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com");
     auto req = drogon::HttpRequest::newHttpJsonRequest({});
     req->setPath("/gateway");
     req->addHeader("Authorization", "QQBot " + token);
     auto resp = co_await client->sendRequestCoro(req);
-    SPDLOG_INFO(resp->getBody());
-    co_return nlohmann::json::parse(resp->getBody()).value("url", "");
+    SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), req->path(), resp->body());
+    co_return nlohmann::json::parse(resp->body()).value("url", "");
 }
 
 static void SendHeartbeat(const drogon::WebSocketConnectionPtr& connection)
@@ -226,7 +229,7 @@ static void SendHeartbeat(const drogon::WebSocketConnectionPtr& connection)
         {"op", opcode::Heartbeat},
         {"d", g_seq.load()}
     };
-    SPDLOG_INFO("QBot SEND {}", payload.dump());
+    SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
     connection->send(payload.dump());
 }
 
@@ -292,7 +295,7 @@ static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
     drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
         nlohmann::json payload;
         payload["markdown"]["content"] = data["d"]["content"];
-        payload["msg_type"] = 2;
+        payload["msg_type"] = 2;        
         auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
     }));
@@ -348,15 +351,22 @@ static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSock
         Dispatcher<DispatchType::GroupMessageCreate, DispatchGroupMessageCreate>,
         Dispatcher<DispatchType::GroupAtMessageCreate, DispatchGroupAtMessageCreate>
     >(type, data);
-    if (!payload.is_null()) [[unlikely]]
+    if (payload.is_null())
     {
-        SPDLOG_INFO("QBot SEND {}", payload.dump());
-        connection->send(payload.dump());
+        return;
     }
+    if (type == DispatchType::Ready)
+    {
+        SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
+        connection->send(payload.dump());
+        return;
+    }
+    
 }
 
 static void OnReconnectReceived(const drogon::WebSocketConnectionPtr& connection)
 {
+    SPDLOG_WARN(QBOT_TAG "Need Resume");
     g_needResume.test_and_set();
 }
 
@@ -371,7 +381,7 @@ static void SendIdentify(const drogon::WebSocketConnectionPtr& connection)
         {"shard", nullptr},
         {"properties", nullptr}
     };
-    SPDLOG_INFO("QBot SEND {}", payload.dump());
+    SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
     connection->send(payload.dump());
 }
 
@@ -385,7 +395,7 @@ static void SendResume(const drogon::WebSocketConnectionPtr& connection)
             {"seq", g_seq.load()}
         }}
     };
-    SPDLOG_INFO("QBot SEND {}", payload.dump());
+    SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
     connection->send(payload.dump());
 }
 
@@ -398,7 +408,7 @@ static void OnHelloReceived(const drogon::WebSocketConnectionPtr& connection)
 
 static void OnHearbeatACKReceived(const drogon::WebSocketConnectionPtr& connection)
 {
-    drogon::app().getIOLoop(1)->runAfter(5s, [connection] {
+    drogon::app().getLoop()->runAfter(5s, [connection] {
         if (!connection->connected()) [[unlikely]]
         {
             return;
@@ -409,7 +419,7 @@ static void OnHearbeatACKReceived(const drogon::WebSocketConnectionPtr& connecti
 
 static void QBotCloseHandler(const drogon::WebSocketConnectionPtr& connection)
 {
-    SPDLOG_INFO("Close");
+    SPDLOG_WARN(QBOT_TAG "Close");
     connection->forceClose();
 }
 
@@ -443,7 +453,7 @@ static void QBotTextHandler(const std::string& msg, const drogon::WebSocketConne
 
 static void QBotMessageHandler(std::string&& msg, const drogon::WebSocketClientPtr& client, const drogon::WebSocketMessageType& type) 
 {
-    SPDLOG_INFO("QBot RECV {}", msg);
+    SPDLOG_INFO(QBOT_TAG "RECV {}", msg);
     auto connection = client->getConnection();
     switch (type)
     {
@@ -476,40 +486,45 @@ static drogon::WebSocketClientPtr ConnectToWSGateway(const char(&schema)[N], con
     return client;
 }
 
-static void QBotAsyncClosedHandler(const drogon::WebSocketClientPtr& client)
+static void QBotClosedHandler(const drogon::WebSocketClientPtr& client)
 {
     auto& cacheMap = getGlobalClientCache();
     auto gateway = *client->getConnection()->getContext<std::string>();
     cacheMap.modify(gateway, [](drogon::WebSocketClientPtr& pClient) {
         auto gateway = *pClient->getConnection()->getContext<std::string>();
-        SPDLOG_INFO("reconnect to {}", gateway);
-        pClient = ConnectToWSGateway("wss://", gateway, QBotMessageHandler, QBotAsyncClosedHandler);
+        SPDLOG_INFO(QBOT_TAG "reconnect to {}", gateway);
+        pClient = ConnectToWSGateway("wss://", gateway, QBotMessageHandler, QBotClosedHandler);
     });
+}
+
+static drogon::Task<> Start()
+{
+    auto token = getGlobalAccessToken().assign(co_await getAccessTokenAsync());
+    auto gateway = co_await getGatewayAysnc(token);
+    if (gateway.empty())
+    {
+        SPDLOG_ERROR("Empty Gateway! Please check the error message.");
+        drogon::app().quit();
+        co_return;
+    }
+    auto client = ConnectToWSGateway("wss://", gateway, QBotMessageHandler, QBotClosedHandler);
+    getGlobalClientCache().insert(gateway, client);
+    drogon::app().getLoop()->runEvery(30s, drogon::async_func([]() -> drogon::Task<> {
+        if (std::string token = co_await getAccessTokenAsync(); token != getGlobalAccessToken()) [[unlikely]]
+        {
+            co_await drogon::switchThreadCoro(drogon::app().getLoop());
+            getGlobalAccessToken().assign(std::move(token));
+        }
+    }));
 }
 
 int main() 
 {
     initEnv();
-    registerAppVersion();
-    drogon::app().registerBeginningAdvice([]() -> drogon::AsyncTask {
-        auto token = getGlobalAccessToken().assign(co_await getAccessTokenAsync());
-        auto gateway = co_await getGatewayAysnc(token);
-        if (gateway.empty())
-        {
-            SPDLOG_ERROR("Empty Gateway! Please check the error message.");
-            drogon::app().quit();
-            co_return;
-        }
-        auto client = ConnectToWSGateway("wss://", gateway, QBotMessageHandler, QBotAsyncClosedHandler);
-        getGlobalClientCache().insert(gateway, client);
-        drogon::app().getIOLoop(0)->runEvery(30s, []() -> drogon::AsyncTask {
-            if (std::string token = co_await getAccessTokenAsync(); token != getGlobalAccessToken()) [[unlikely]]
-            {
-                co_await drogon::switchThreadCoro(drogon::app().getLoop());
-                getGlobalAccessToken().assign(std::move(token));
-            }
-        });
-    });
-    drogon::app().run();
+    drogon::app()
+        .addListener("0.0.0.0", 8080)
+        .registerHandler("/", &AppVersionHandler, { drogon::Get })
+        .registerBeginningAdvice(drogon::async_func(Start))
+        .run();
     return 0;
 }
