@@ -13,6 +13,7 @@ constexpr auto C_LocaleName = "C";
 #define QBOT_TAG "\033[36mQBot\033[0m "
 
 using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
+using MessageCache = drogon::CacheMap<std::uint32_t, std::string>;
 using WSAsyncMessageHandler = std::function<drogon::Task<void>(std::string&&, const drogon::WebSocketClientPtr&, const drogon::WebSocketMessageType&)>;
 using WSMessageHandler = std::function<void(std::string&&, const drogon::WebSocketClientPtr&, const drogon::WebSocketMessageType&)>;
 using WSAsyncClosedHandler = std::function<drogon::Task<void>(const drogon::WebSocketClientPtr&)>;
@@ -107,7 +108,6 @@ struct Dispatcher
 };
 
 namespace drogon {
-
     template<> 
     HttpRequestPtr toRequest(nlohmann::json&& obj)
     {
@@ -126,6 +126,12 @@ namespace drogon {
         req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
         req->setBody(obj.dump());
         return req;
+    }
+
+    template <>
+    nlohmann::json fromResponse(const HttpResponse& resp)
+    {
+        return nlohmann::json::parse(resp.body());
     }
 }
 
@@ -147,6 +153,12 @@ static std::string& getGlobalSessionId()
     return sessionId;
 }
 
+static MessageCache& getGlobalEventIdCache()
+{
+    static auto cacheMap = MessageCache(drogon::app().getIOLoop(0));
+    return cacheMap;
+}
+
 static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
 {
     auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com");
@@ -154,13 +166,13 @@ static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, co
     req->setPath(path);
     req->addHeader("Authorization", "QQBot " + token);
     auto& resp = co_await client->sendRequestCoro(req);
-    SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), path, resp->body());
-    co_return nlohmann::json::parse(resp->body());
+    SPDLOG_INFO(QBOT_TAG "{} {} {} {}", req->methodString(), path, req->body(), resp->body());
+    co_return *resp;
 }
 
 static void HttpLogger(const drogon::HttpRequestPtr& req, const drogon::HttpResponsePtr& resp)
 {
-    SPDLOG_INFO("{} {} {} status: {} bytes: {}", req->methodString(), req->path(), nlohmann::json(req->parameters()).dump(), (int)resp->statusCode(), resp->body().size());
+    SPDLOG_INFO("{} {} {} {}", req->methodString(), req->path(), nlohmann::json(req->parameters()).dump(), resp->body());
 }
 
 static void initEnv()
@@ -281,9 +293,12 @@ static drogon::Task<nlohmann::json> DeleteC2CMessageAysnc(const nlohmann::json& 
 static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
 {
     drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
-        nlohmann::json payload;
-        payload["markdown"]["content"] = data["d"]["content"];
-        payload["msg_type"] = 2;
+        nlohmann::json payload{
+            {"markdown", {{"content", data["d"]["content"]}}},
+            {"msg_type", 2},
+            {"msg_id", data["d"]["id"]},
+            {"msg_seq", g_seq.load()}
+        };
         auto& userOpenId = data["d"]["author"]["user_openid"];
         co_await SendC2CMessageAsync(payload, userOpenId, getGlobalAccessToken());
     }));
@@ -293,9 +308,12 @@ static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
 static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
 {
     drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
-        nlohmann::json payload;
-        payload["markdown"]["content"] = data["d"]["content"];
-        payload["msg_type"] = 2;        
+        nlohmann::json payload{
+            {"markdown", {{"content", data["d"]["content"]}}},
+            {"msg_type", 2},
+            {"msg_id", data["d"]["id"]},
+            {"msg_seq", g_seq.load()}
+        };
         auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
     }));
@@ -305,9 +323,12 @@ static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
 static nlohmann::json DispatchGroupAtMessageCreate(const nlohmann::json& data)
 {
     drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
-        nlohmann::json payload;
-        payload["markdown"]["content"] = data["d"]["content"];
-        payload["msg_type"] = 2;
+        nlohmann::json payload{
+            {"markdown", {{"content", data["d"]["content"]}}},
+            {"msg_type", 2},
+            {"msg_id", data["d"]["id"]},
+            {"msg_seq", g_seq.load()}
+        };
         auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
     }));
@@ -522,8 +543,8 @@ int main()
 {
     initEnv();
     drogon::app()
-        .addListener("0.0.0.0", 8080)
-        .registerHandler("/", &AppVersionHandler, { drogon::Get })
+        .addListener("0.0.0.0", drogon::app().getCustomConfig().get("port", 8080).as<Json::Int>())
+        .registerHandler("/", &AppVersionHandler, { drogon::Get }, "AppVersion")
         .registerBeginningAdvice(drogon::async_func(Start))
         .run();
     return 0;
