@@ -128,7 +128,7 @@ namespace drogon {
         return req;
     }
 
-    template <>
+    template<>
     nlohmann::json fromResponse(const HttpResponse& resp)
     {
         return nlohmann::json::parse(resp.body());
@@ -296,8 +296,7 @@ static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
         nlohmann::json payload{
             {"markdown", {{"content", data["d"]["content"]}}},
             {"msg_type", 2},
-            {"msg_id", data["d"]["id"]},
-            {"msg_seq", g_seq.load()}
+            {"msg_id", data["d"]["id"]}
         };
         auto& userOpenId = data["d"]["author"]["user_openid"];
         co_await SendC2CMessageAsync(payload, userOpenId, getGlobalAccessToken());
@@ -311,8 +310,7 @@ static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
         nlohmann::json payload{
             {"markdown", {{"content", data["d"]["content"]}}},
             {"msg_type", 2},
-            {"msg_id", data["d"]["id"]},
-            {"msg_seq", g_seq.load()}
+            {"msg_id", data["d"]["id"]}
         };
         auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
@@ -326,8 +324,7 @@ static nlohmann::json DispatchGroupAtMessageCreate(const nlohmann::json& data)
         nlohmann::json payload{
             {"markdown", {{"content", data["d"]["content"]}}},
             {"msg_type", 2},
-            {"msg_id", data["d"]["id"]},
-            {"msg_seq", g_seq.load()}
+            {"msg_id", data["d"]["id"]}
         };
         auto& userOpenId = data["d"]["group_openid"];
         co_await SendGroupMessageAsync(payload, userOpenId, getGlobalAccessToken());
@@ -370,7 +367,11 @@ static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSock
         Dispatcher<DispatchType::Ready, DispatchReady>,
         Dispatcher<DispatchType::C2CMessageCreate, DispatchC2CMessageCreate>,
         Dispatcher<DispatchType::GroupMessageCreate, DispatchGroupMessageCreate>,
-        Dispatcher<DispatchType::GroupAtMessageCreate, DispatchGroupAtMessageCreate>
+        Dispatcher<DispatchType::GroupAtMessageCreate, DispatchGroupAtMessageCreate>,
+        Dispatcher<DispatchType::FriendAdd, DispatchFriendAdd>,
+        Dispatcher<DispatchType::FriendDel, DispatchFriendDel>,
+        Dispatcher<DispatchType::GroupAddRobot, DispatchGroupAddRobot>,
+        Dispatcher<DispatchType::GroupDelRobot, DispatchGroupDelRobot>
     >(type, data);
     if (payload.is_null())
     {

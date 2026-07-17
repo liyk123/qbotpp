@@ -4,16 +4,6 @@
 
 namespace Onebot {
     namespace V11 {
-        //struct EventType
-        //{
-        //    std::string_view post_type;
-        //    std::string_view sub_type;
-
-        //    bool operator==(const EventType& other) const
-        //    {
-        //        return post_type == other.post_type && sub_type == other.sub_type;
-        //    }
-        //};
 
         namespace Event {
             struct PrivateMsg
@@ -41,6 +31,8 @@ namespace Onebot {
                     std::string openid;// QQ开放平台ID
                 }sender;
             };
+
+            NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(PrivateMsg, post_type, message_type)
 
             struct GroupMsg
             {
@@ -279,6 +271,13 @@ namespace Onebot {
             //    };
             //    std::optional<HonorType> honor_type = std::nullopt; // 荣誉类型
             //};
+        }
+    }
+
+    namespace API {
+        nlohmann::json ref_message(nlohmann::json data)
+        {
+            return { "message_reference", {{"message_id",data["d"]["message_scene"]["ext"].at(data["d"].contains("msg_elements")).get<std::string_view>().substr(sizeof("msg_idx=") - 1)}} };
         }
     }
 }
