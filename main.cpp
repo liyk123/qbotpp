@@ -145,12 +145,6 @@ namespace drogon {
     {
         return nlohmann::json::parse(resp.body());
     }
-
-    template<>
-    std::string fromResponse(const HttpResponse& resp)
-    {
-        return std::string(resp.body());
-    }
 }
 
 static std::string& getGlobalAccessToken()
@@ -185,7 +179,7 @@ static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, co
     req->addHeader("Authorization", "QQBot " + token);
     auto resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {} {}", req->methodString(), path, req->body(), resp->body());
-    co_return *resp;
+    co_return resp->as<nlohmann::json>();
 }
 
 static void HttpLogger(const drogon::HttpRequestPtr& req, const drogon::HttpResponsePtr& resp)
