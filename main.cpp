@@ -120,7 +120,7 @@ struct Dispatcher
 };
 
 namespace drogon {
-    template<> 
+    template<>
     HttpRequestPtr toRequest(nlohmann::json&& obj)
     {
         auto req = HttpRequest::newHttpRequest();
@@ -144,6 +144,12 @@ namespace drogon {
     nlohmann::json fromResponse(const HttpResponse& resp)
     {
         return nlohmann::json::parse(resp.body());
+    }
+
+    template<>
+    std::string fromResponse(const HttpResponse& resp)
+    {
+        return std::string(resp.body());
     }
 }
 
@@ -197,7 +203,7 @@ static void initEnv()
     std::locale::global(std::locale(TargetLocaleName));
     std::locale::global(std::locale(std::locale(), C_LocaleName, std::locale::numeric));
     spdlog::default_logger()->set_pattern(LogPattern);
-    trantor::Logger::enableSpdLog();
+    trantor::Logger::enableSpdLog(spdlog::default_logger());
     drogon::app()
         .loadConfigFile("./config.json")
         .setLogLocalTime(true)
