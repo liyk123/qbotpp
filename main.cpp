@@ -199,15 +199,15 @@ static void initEnv()
     spdlog::default_logger()->set_pattern(LogPattern);
     trantor::Logger::enableSpdLog(spdlog::default_logger());
     drogon::app()
-        .loadConfigFile("./config.json")
         .setLogLocalTime(true)
 #ifdef DEBUG
         .setLogLevel(trantor::Logger::kDebug)
 #else
         .setLogLevel(trantor::Logger::kInfo)
 #endif // DEBUG
-        .registerPostHandlingAdvice(HttpLogger)
-        .setThreadNum(0);
+        .setThreadNum(0)
+        .registerPostHandlingAdvice(HttpLogger);
+    drogon::app().loadConfigFile("./config.yml");
     std::signal(SIGTERM, [](int) {
         drogon::app().getLoop()->runInLoop([] { drogon::app().quit(); }); 
     });
@@ -564,8 +564,11 @@ static drogon::Task<> Start()
 int main() 
 {
     initEnv();
+    if (drogon::app().getListeners().size() == 0)
+    {
+        drogon::app().addListener("0.0.0.0", 8080);
+    }
     drogon::app()
-        .addListener("0.0.0.0", drogon::app().getCustomConfig().get("port", 8080).as<Json::Int>())
         .registerHandler("/", &AppVersionHandler, { drogon::Get }, "AppVersion")
         .registerBeginningAdvice(drogon::async_func(Start))
         .run();
