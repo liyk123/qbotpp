@@ -183,7 +183,7 @@ static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, co
     auto req = drogon::HttpRequest::newCustomHttpRequest(data);
     req->setPath(path);
     req->addHeader("Authorization", "QQBot " + token);
-    auto& resp = co_await client->sendRequestCoro(req);
+    auto resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {} {}", req->methodString(), path, req->body(), resp->body());
     co_return *resp;
 }
@@ -239,7 +239,7 @@ static drogon::Task<std::string> getAccessTokenAsync()
     req->setPath("/app/getAppAccessToken");
     auto resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), req->path(), resp->body());
-    co_return nlohmann::json::parse(resp->body()).value("access_token", "");
+    co_return resp->as<nlohmann::json>().value("access_token", "");
 }
 
 static drogon::Task<std::string> getGatewayAysnc(const std::string token)
@@ -250,7 +250,7 @@ static drogon::Task<std::string> getGatewayAysnc(const std::string token)
     req->addHeader("Authorization", "QQBot " + token);
     auto resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), req->path(), resp->body());
-    co_return nlohmann::json::parse(resp->body()).value("url", "");
+    co_return resp->as<nlohmann::json>().value("url", "");
 }
 
 static void SendHeartbeat(const drogon::WebSocketConnectionPtr& connection)
