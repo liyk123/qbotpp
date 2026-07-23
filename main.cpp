@@ -10,6 +10,8 @@ constexpr auto versionInfo = "Branch: " GIT_BRANCH "\nCommit: " GIT_VERSION "\nD
 constexpr auto LogPattern = "%m-%d %H:%M:%S.%e [%^%l%$] [thread:%t] [%s:%#] %v";
 constexpr auto TargetLocaleName = "zh_CN.UTF-8";
 constexpr auto C_LocaleName = "C";
+constexpr auto QBotUniversalUrl = "https://api.sgroup.qq.com";
+constexpr auto QBotSandboxUrl = "https://sandbox.api.sgroup.qq.com";
 #define QBOT_TAG "\033[36mQBot\033[0m "
 
 using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
@@ -165,6 +167,13 @@ static std::string& getGlobalSessionId()
     return sessionId;
 }
 
+static drogon::HttpClientPtr getGlobalQQBotApiClient()
+{
+    static auto sandbox = drogon::app().getCustomConfig().get("sandbox", false).asBool();
+    static auto client = drogon::HttpClient::newHttpClient(sandbox ? QBotSandboxUrl : QBotUniversalUrl);
+    return client;
+}
+
 static MessageCache& getGlobalEventIdCache()
 {
     static auto cacheMap = MessageCache(drogon::app().getIOLoop(0));
@@ -173,7 +182,7 @@ static MessageCache& getGlobalEventIdCache()
 
 static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
 {
-    static auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com");
+    auto client = getGlobalQQBotApiClient();
     auto req = drogon::HttpRequest::newCustomHttpRequest(data);
     req->setPath(path);
     req->addHeader("Authorization", "QQBot " + token);
@@ -238,7 +247,7 @@ static drogon::Task<std::string> getAccessTokenAsync()
 
 static drogon::Task<std::string> getGatewayAysnc(const std::string token)
 {
-    auto client = drogon::HttpClient::newHttpClient("https://api.sgroup.qq.com");
+    auto client = getGlobalQQBotApiClient();
     auto req = drogon::HttpRequest::newHttpJsonRequest({});
     req->setPath("/gateway");
     req->addHeader("Authorization", "QQBot " + token);
