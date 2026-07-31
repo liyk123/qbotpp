@@ -10,7 +10,7 @@ constexpr auto versionInfo = "Branch: " GIT_BRANCH "\nCommit: " GIT_VERSION "\nD
 constexpr auto LogPattern = "%m-%d %H:%M:%S.%e [%^%l%$] [thread:%t] [%s:%#] %v";
 constexpr auto TargetLocaleName = "zh_CN.UTF-8";
 constexpr auto C_LocaleName = "C";
-constexpr auto QBotUniversalUrl = "https://api.sgroup.qq.com";
+constexpr auto QBotUniversalUrl = "https://api.bot.qq.com";
 constexpr auto QBotSandboxUrl = "https://sandbox.api.sgroup.qq.com";
 #define QBOT_TAG "\033[36mQBot\033[0m "
 
@@ -231,9 +231,9 @@ static void AppVersionHandler(const drogon::HttpRequestPtr& req, drogon::AdviceC
     callback(resp);
 };
 
-static drogon::Task<std::string> getAccessTokenAsync()
+static drogon::Task<std::pair<std::string, std::uint64_t>> getAccessTokenAsync()
 {
-    static auto client = drogon::HttpClient::newHttpClient("https://bots.qq.com");
+    static auto client = getGlobalQQBotApiClient();
     auto& config = drogon::app().getCustomConfig();
     auto req = drogon::HttpRequest::newCustomHttpRequest(nlohmann::json{
         {"appId", config["appId"].asString()},
@@ -242,10 +242,11 @@ static drogon::Task<std::string> getAccessTokenAsync()
     req->setPath("/app/getAppAccessToken");
     auto resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {}", req->methodString(), req->path(), resp->body());
-    co_return resp->as<nlohmann::json>().value("access_token", "");
+    auto data = resp->as<nlohmann::json>();
+    co_return{ data.value("access_token", ""),std::stoull(data.value("expires_in","30"))};
 }
 
-static drogon::Task<std::string> getGatewayAysnc(const std::string token)
+static drogon::Task<std::string> getGatewayAsync(const std::string token)
 {
     auto client = getGlobalQQBotApiClient();
     auto req = drogon::HttpRequest::newHttpJsonRequest({});
@@ -549,10 +550,22 @@ static void QBotClosedHandler(const drogon::WebSocketClientPtr& client)
     });
 }
 
+static drogon::Task<> getAccessTokenAsyncEveryExpiredTime()
+{
+    auto [token, expiredTime] = co_await getAccessTokenAsync();
+    if (token != getGlobalAccessToken()) [[unlikely]]
+    {
+        co_await drogon::switchThreadCoro(drogon::app().getLoop());
+        getGlobalAccessToken().assign(std::move(token));
+    }
+    auto time = expiredTime > 30 ? expiredTime - 30 : expiredTime;
+    drogon::app().getLoop()->runAfter(time, drogon::async_func(getAccessTokenAsyncEveryExpiredTime));
+}
+
 static drogon::Task<> Start()
 {
-    auto token = getGlobalAccessToken().assign(co_await getAccessTokenAsync());
-    auto gateway = co_await getGatewayAysnc(token);
+    co_await getAccessTokenAsyncEveryExpiredTime();
+    auto gateway = co_await getGatewayAsync(getGlobalAccessToken());
     if (gateway.empty())
     {
         SPDLOG_ERROR("Empty Gateway! Please check the error message.");
@@ -561,13 +574,6 @@ static drogon::Task<> Start()
     }
     auto client = ConnectToWSGateway<"wss://">(gateway, QBotMessageHandler, QBotClosedHandler);
     getGlobalClientCache().insert(gateway, client);
-    drogon::app().getLoop()->runEvery(30s, drogon::async_func([]() -> drogon::Task<> {
-        if (std::string token = co_await getAccessTokenAsync(); token != getGlobalAccessToken()) [[unlikely]]
-        {
-            co_await drogon::switchThreadCoro(drogon::app().getLoop());
-            getGlobalAccessToken().assign(std::move(token));
-        }
-    }));
 }
 
 int main() 
