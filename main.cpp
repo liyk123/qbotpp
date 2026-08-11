@@ -110,6 +110,8 @@ struct DispatchType
     static constexpr FixedString GroupMemberAdd = "GROUP_MEMBER_ADD";
     // 群用户移除
     static constexpr FixedString GroupMemberRemove = "GROUP_MEMBER_REMOVE";
+    // 用户申请加群事件
+    static constexpr FixedString GroupJoinRequest = "GROUP_JOIN_REQUEST";
 };
 
 typedef nlohmann::json(*DispatchAction)(const nlohmann::json& data);
@@ -296,28 +298,58 @@ static drogon::Task<nlohmann::json> SendGroupMessageAsync(const nlohmann::json& 
     co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<nlohmann::json> SendC2CFileAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadC2CFileAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/users/{}/files", openId);
     co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<nlohmann::json> SendGroupFileAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadC2CPartPrepareAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+{
+    auto path = std::format("/v2/users/{}/upload_prepare", openId);
+    co_return co_await CallQBotApiAsync(path, payload, token);
+}
+
+static drogon::Task<nlohmann::json> UploadC2CPartFinishAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+{
+    auto path = std::format("/v2/users/{}/upload_part_finish", openId);
+    co_return co_await CallQBotApiAsync(path, payload, token);
+}
+
+static drogon::Task<nlohmann::json> UploadGroupFileAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/groups/{}/files", openId);
     co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
-static drogon::Task<nlohmann::json> DeleteGroupMessageAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadGroupPartPrepareAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+{
+    auto path = std::format("/v2/groups/{}/upload_prepare", openId);
+    co_return co_await CallQBotApiAsync(path, payload, token);
+}
+
+static drogon::Task<nlohmann::json> UploadGroupPartFinishAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+{
+    auto path = std::format("/v2/groups/{}/upload_part_finish", openId);
+    co_return co_await CallQBotApiAsync(path, payload, token);
+}
+
+static drogon::Task<nlohmann::json> DeleteGroupMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/groups/{}/messages/{}", openId, payload.get<std::string_view>());
     co_return co_await CallQBotApiAsync(path, {}, token);
 }
 
-static drogon::Task<nlohmann::json> DeleteC2CMessageAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> DeleteC2CMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/users/{}/messages/{}", openId, payload.get<std::string_view>());
     co_return co_await CallQBotApiAsync(path, {}, token);
+}
+
+static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json& payload, const std::string& groupId, const std::string& userId, const std::string token)
+{
+    auto path = std::format("/v2/groups/{}/approval_join_request/{}", groupId, userId);
+    co_return co_await CallQBotApiAsync(path, payload, token);
 }
 
 static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
@@ -558,7 +590,7 @@ static drogon::Task<> getAccessTokenAsyncEveryExpiredTime()
         co_await drogon::switchThreadCoro(drogon::app().getLoop());
         getGlobalAccessToken().assign(std::move(token));
     }
-    auto time = expiredTime > 30 ? expiredTime - 30 : expiredTime;
+    auto time = std::chrono::seconds{ expiredTime > 30 ? expiredTime - 30 : expiredTime };
     drogon::app().getLoop()->runAfter(time, drogon::async_func(getAccessTokenAsyncEveryExpiredTime));
 }
 
