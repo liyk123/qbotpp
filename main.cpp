@@ -110,7 +110,7 @@ struct DispatchType
     static constexpr FixedString GroupMemberAdd = "GROUP_MEMBER_ADD";
     // 群用户移除
     static constexpr FixedString GroupMemberRemove = "GROUP_MEMBER_REMOVE";
-    // 用户申请加群事件
+    // 用户申请加群
     static constexpr FixedString GroupJoinRequest = "GROUP_JOIN_REQUEST";
 };
 
@@ -182,12 +182,13 @@ static MessageCache& getGlobalEventIdCache()
     return cacheMap;
 }
 
-static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
+static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token, const drogon::HttpMethod method = drogon::Post)
 {
     auto client = getGlobalQQBotApiClient();
     auto req = drogon::HttpRequest::newCustomHttpRequest(data);
     req->setPath(path);
     req->addHeader("Authorization", "QQBot " + token);
+    req->setMethod(method);
     auto resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {} {}", req->methodString(), path, req->body(), resp->body());
     co_return resp->as<nlohmann::json>();
@@ -211,14 +212,14 @@ static void initEnv()
     trantor::Logger::enableSpdLog(spdlog::default_logger());
     drogon::app()
         .setLogLocalTime(true)
-#ifdef DEBUG
-        .setLogLevel(trantor::Logger::kDebug)
-#else
-        .setLogLevel(trantor::Logger::kInfo)
-#endif // DEBUG
         .setThreadNum(0)
         .registerPostHandlingAdvice(HttpLogger);
     drogon::app().loadConfigFile("./config.yml");
+    if (drogon::app().getCustomConfig().isMember("log_level"))
+    {
+        auto logLevel = spdlog::level::from_str(drogon::app().getCustomConfig()["log_level"].asString());
+        spdlog::default_logger()->set_level(logLevel);
+    }
     std::signal(SIGTERM, [](int) {
         drogon::app().getLoop()->runInLoop([] { drogon::app().quit(); }); 
     });
@@ -235,7 +236,7 @@ static void AppVersionHandler(const drogon::HttpRequestPtr& req, drogon::AdviceC
 
 static drogon::Task<std::pair<std::string, std::uint64_t>> getAccessTokenAsync()
 {
-    static auto client = getGlobalQQBotApiClient();
+    static auto client = drogon::HttpClient::newHttpClient(QBotUniversalUrl);
     auto& config = drogon::app().getCustomConfig();
     auto req = drogon::HttpRequest::newCustomHttpRequest(nlohmann::json{
         {"appId", config["appId"].asString()},
@@ -337,13 +338,19 @@ static drogon::Task<nlohmann::json> UploadGroupPartFinishAysnc(const nlohmann::j
 static drogon::Task<nlohmann::json> DeleteGroupMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/groups/{}/messages/{}", openId, payload.get<std::string_view>());
-    co_return co_await CallQBotApiAsync(path, {}, token);
+    co_return co_await CallQBotApiAsync(path, {}, token, drogon::Delete);
 }
 
 static drogon::Task<nlohmann::json> DeleteC2CMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
 {
     auto path = std::format("/v2/users/{}/messages/{}", openId, payload.get<std::string_view>());
-    co_return co_await CallQBotApiAsync(path, {}, token);
+    co_return co_await CallQBotApiAsync(path, {}, token, drogon::Delete);
+}
+
+static drogon::Task<nlohmann::json> GetJoinRequestList(const nlohmann::json& payload, const std::string& openId, const std::string token)
+{
+    auto path = std::format("/v2/groups/{}/join_request_list", openId);
+    co_return co_await CallQBotApiAsync(path, payload, token, drogon::Get);
 }
 
 static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json& payload, const std::string& groupId, const std::string& userId, const std::string token)
@@ -351,6 +358,52 @@ static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json& pa
     auto path = std::format("/v2/groups/{}/approval_join_request/{}", groupId, userId);
     co_return co_await CallQBotApiAsync(path, payload, token);
 }
+
+template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Post)
+static drogon::Task<nlohmann::json> RestrictChatSetting(const nlohmann::json& payload, const std::string& openId, const std::string token)
+{
+    auto path = std::format("/v2/groups/{}/restrict_chat_setting", openId);
+    nlohmann::json ret = co_await CallQBotApiAsync(path, payload, token, method);
+    co_return ret;
+}
+
+template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Post)
+static drogon::Task<nlohmann::json> JoinApprovalStrategy(const nlohmann::json& payload, const std::string token)
+{
+    auto path = "/v2/groups/join_approval_strategy";
+    nlohmann::json ret = co_await CallQBotApiAsync(path, payload, token, method);
+    co_return ret;
+}
+
+template<drogon::HttpMethod method> requires (method == drogon::Patch || method == drogon::Delete)
+static drogon::Task<nlohmann::json> JoinApprovalStrategy(const nlohmann::json& payload, const std::string& strategyId, const std::string token)
+{
+    auto path = std::format("/v2/groups/join_approval_strategy/{}", strategyId);
+    nlohmann::json ret = co_await CallQBotApiAsync(path, payload, token, method);
+    co_return ret;
+}
+
+static drogon::Task<nlohmann::json> GetSelfDetails(const std::string token)
+{
+    co_return co_await CallQBotApiAsync("/users/@me", {}, token, drogon::Get);
+}
+
+template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Put)
+static drogon::Task<nlohmann::json> Menu(const nlohmann::json& payload, const std::string token)
+{
+    auto path = "/v2/menu";
+    nlohmann::json ret = co_await CallQBotApiAsync(path, payload, token, method);
+    co_return ret;
+}
+
+template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Post)
+static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload, const std::string token)
+{
+    auto path = "/v2/panels";
+    nlohmann::json ret = co_await CallQBotApiAsync(path, payload, token, method);
+    co_return ret;
+}
+
 
 static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
 {
@@ -414,6 +467,11 @@ static nlohmann::json DispatchGroupDelRobot(const nlohmann::json& data)
     return {};
 }
 
+static nlohmann::json DispatchGroupJoinRequest(const nlohmann::json& data)
+{
+    return {};
+}
+
 template<typename... Ds>
 nlohmann::json _dispacher_construct(const std::string_view type, const nlohmann::json& data)
 {
@@ -434,7 +492,8 @@ static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSock
         Dispatcher<DispatchType::FriendAdd, DispatchFriendAdd>,
         Dispatcher<DispatchType::FriendDel, DispatchFriendDel>,
         Dispatcher<DispatchType::GroupAddRobot, DispatchGroupAddRobot>,
-        Dispatcher<DispatchType::GroupDelRobot, DispatchGroupDelRobot>
+        Dispatcher<DispatchType::GroupDelRobot, DispatchGroupDelRobot>,
+        Dispatcher<DispatchType::GroupJoinRequest, DispatchGroupJoinRequest>
     >(type, data);
     if (payload.is_null())
     {
@@ -444,9 +503,11 @@ static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSock
     {
         SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
         connection->send(payload.dump());
+        drogon::app().getLoop()->queueInLoop(drogon::async_func([]() -> drogon::Task<> { 
+            co_await Panels<drogon::Get>({ {"scope","c2c"} }, getGlobalAccessToken()); 
+        }));
         return;
     }
-    
 }
 
 static void OnReconnectReceived(const drogon::WebSocketConnectionPtr& connection)

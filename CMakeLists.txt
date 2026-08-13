@@ -70,7 +70,7 @@ get_git_date_time(GIT_DATE)
 add_definitions(-DGIT_DATE="${GIT_DATE}")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_definitions(-DDEBUG)
+    add_definitions(-DDEBUG -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 endif()
 
 add_definitions(-DPROJECT_NAME="${PROJECT_NAME}")
