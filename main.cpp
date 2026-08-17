@@ -7,7 +7,7 @@
 using namespace std::literals;
 
 constexpr auto versionInfo = "Branch: " GIT_BRANCH "\nCommit: " GIT_VERSION "\nDate: " GIT_DATE;
-constexpr auto LogPattern = "%m-%d %H:%M:%S.%e [%^%l%$] [thread:%t] [%s:%#] %v";
+constexpr auto LogPattern = "%m-%d %H:%M:%S.%e [%^%L%$] [thread:%t] [%s:%#] %v";
 constexpr auto TargetLocaleName = "zh_CN.UTF-8";
 constexpr auto C_LocaleName = "C";
 constexpr auto QBotUniversalUrl = "https://api.bot.qq.com";
@@ -134,50 +134,76 @@ using HttpMethodVariant = std::variant<
     HttpMethodType<drogon::Put>
 >;
 
+using JsonMethod = std::pair<nlohmann::json, HttpMethodVariant>;
+
+template<typename T> requires std::same_as<std::decay_t<T>, JsonMethod>
+drogon::HttpRequestPtr toRequestPtr(T&& obj)
+{
+    auto&& [data, method] = obj;
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+    std::visit([&](auto&& x) {
+        req->setMethod(x.value);
+        if constexpr (x.value == drogon::Get)
+        {
+            for (auto&& [key, val] : data.items())
+            {
+                req->setParameter(key, val);
+            }
+        }
+        else
+        {
+            req->setBody(data.dump());
+        }
+    }, method);
+    return req;
+}
+
+template<typename T> requires std::same_as<std::decay_t<T>, nlohmann::json>
+drogon::HttpRequestPtr toRequestPtr(T&& obj)
+{
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setMethod(drogon::Post);
+    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+    req->setBody(obj.dump());
+    return req;
+}
+
 namespace drogon {
     template<>
-    HttpRequestPtr toRequest(std::pair<nlohmann::json, HttpMethodVariant>&& obj)
+    HttpRequestPtr toRequest(JsonMethod&& obj)
     {
-        auto&& [data, method] = std::move(obj);
-        auto req = HttpRequest::newHttpRequest();
-        req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-        std::visit([&](auto&& x) {
-            req->setMethod(x.value);
-            if constexpr (x.value == Get)
-            {
-                for (auto&& [key, val] : data.items())
-                {
-                    req->setParameter(key, val);
-                }
-            }
-            else
-            {
-                req->setBody(data.dump());
-            }
-        }, method);
-        return req;
+        return toRequestPtr(obj);
     }
 
     template<>
-    HttpRequestPtr toRequest(const std::pair<nlohmann::json, HttpMethodVariant>& obj)
+    HttpRequestPtr toRequest(const JsonMethod& obj)
     {
-        return toRequest(std::move(obj));
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(JsonMethod& obj)
+    {
+        return toRequestPtr(obj);
     }
 
     template<>
     HttpRequestPtr toRequest(nlohmann::json&& obj)
     {
-        auto req = HttpRequest::newHttpRequest();
-        req->setMethod(drogon::Post);
-        req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-        req->setBody(obj.dump());
-        return req;
+        return toRequestPtr(obj);
     }
 
     template<>
     HttpRequestPtr toRequest(const nlohmann::json& obj)
     {
-        return toRequest(std::move(obj));
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(nlohmann::json& obj)
+    {
+        return toRequestPtr(obj);
     }
 
     template<>
@@ -222,7 +248,7 @@ template<drogon::HttpMethod method = drogon::Post>
 static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
 {
     auto client = getGlobalQQBotApiClient();
-    auto req = drogon::HttpRequest::newCustomHttpRequest(std::make_pair(data, HttpMethodVariant{ HttpMethodType<method>{} }));
+    auto req = drogon::HttpRequest::newCustomHttpRequest(JsonMethod{ data, HttpMethodType<method>{} });
     req->setPath(path);
     req->addHeader("Authorization", "QQBot " + token);
     drogon::HttpResponsePtr resp = co_await client->sendRequestCoro(req);
@@ -247,13 +273,11 @@ static void initEnv()
     spdlog::default_logger()->set_pattern(LogPattern);
     trantor::Logger::enableSpdLog(spdlog::default_logger());
     drogon::app()
-        .setLogLocalTime(true)
         .setThreadNum(0)
-        .registerPostHandlingAdvice(HttpLogger);
-    drogon::app().loadConfigFile("./config.yml");
-    auto defaultLevelStr = spdlog::level::to_string_view(spdlog::default_logger()->level());
-    auto logLevelStr = drogon::app().getCustomConfig().get("log_level", defaultLevelStr.data()).asString();
-    spdlog::default_logger()->set_level(spdlog::level::from_str(logLevelStr));
+        .registerPostHandlingAdvice(HttpLogger)
+        .addListener("0.0.0.0", 8080)
+        .loadConfigFile("config.yml");
+    spdlog::default_logger()->set_level(spdlog::level::level_enum{ trantor::Logger::logLevel() });
     std::signal(SIGTERM, [](int) {
         drogon::app().getLoop()->runInLoop([] { drogon::app().quit(); }); 
     });
@@ -438,6 +462,20 @@ static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload, const 
     co_return ret;
 }
 
+template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Put || method == drogon::Delete)
+static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload,const std::string& panelId, const std::string token)
+{
+    auto path = std::format("/v2/panels/{}", panelId);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    co_return ret;
+}
+
+static drogon::Task<nlohmann::json> PutPanelsTarget(const nlohmann::json& payload, const std::string& panelId, const std::string token)
+{
+    auto path = std::format("/v2/panels/{}/target", panelId);
+    nlohmann::json ret = co_await CallQBotApiAsync<drogon::Put>(path, payload, token);
+    co_return ret;
+}
 
 static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
 {
@@ -706,12 +744,8 @@ static drogon::Task<> Start()
 int main() 
 {
     initEnv();
-    if (drogon::app().getListeners().size() == 0)
-    {
-        drogon::app().addListener("0.0.0.0", 8080);
-    }
     drogon::app()
-        .registerHandler("/", &AppVersionHandler, { drogon::Get }, "AppVersion")
+        .registerHandler("/", &AppVersionHandler, { drogon::Get })
         .registerBeginningAdvice(drogon::async_func(Start))
         .run();
     return 0;
