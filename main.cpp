@@ -102,11 +102,6 @@ static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, co
     co_return resp->as<nlohmann::json>();
 }
 
-static void HttpLogger(const drogon::HttpRequestPtr& req, const drogon::HttpResponsePtr& resp)
-{
-    SPDLOG_INFO("{} {} {} {}", req->methodString(), req->path(), nlohmann::json(req->parameters()).dump(), resp->body());
-}
-
 static void initEnv()
 {
 #ifdef _WIN32
@@ -118,10 +113,7 @@ static void initEnv()
     std::locale::global(std::locale(std::locale(), C_LocaleName, std::locale::numeric));
     spdlog::default_logger()->set_pattern(LogPattern);
     trantor::Logger::enableSpdLog(spdlog::default_logger());
-    drogon::app()
-        .setThreadNum(0)
-        .registerPostHandlingAdvice(HttpLogger)
-        .loadConfigFile("config.yml");
+    drogon::app().loadConfigFile("config.yml");
     spdlog::default_logger()->set_level(spdlog::level::level_enum{ trantor::Logger::logLevel() });
     std::signal(SIGTERM, [](int) {
         drogon::app().getLoop()->runInLoop([] { drogon::app().quit(); }); 
