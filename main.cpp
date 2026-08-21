@@ -1,8 +1,10 @@
 #include <csignal>
 #include <drogon/drogon.h>
 #include <drogon/WebSocketClient.h>
+#include <spdlog/sinks/ansicolor_sink.h>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#include "qbot_tools.h"
 
 using namespace std::literals;
 
@@ -51,167 +53,11 @@ alignas(std::hardware_destructive_interference_size) std::atomic<std::uint64_t> 
 
 alignas(std::hardware_destructive_interference_size) std::atomic_flag g_needResume{};
 
-// FNV-1a 32位编译期哈希算法
-static constexpr uint32_t FNV1aHash(std::string_view sv)
-{
-    uint32_t hash = 2166136261UL; // FNV 偏移基数
-    for (char c : sv)
-    {
-        hash ^= static_cast<uint8_t>(c);
-        hash *= 16777619UL;       // FNV 质数
-    }
-    return hash;
-}
-
-template<size_t N>
-struct FixedString
-{
-    char data[N]{};
-
-    constexpr FixedString(const char(&str)[N])
-    {
-        std::copy_n(str, N, data);
-    }
-
-    constexpr FixedString() = default;
-
-    constexpr size_t length() const { return N - 1; }
-};
-
-struct DispatchType
-{
-    // 登录成功
-    static constexpr FixedString Ready = "READY";
-    // 重连成功
-    static constexpr FixedString Resumed = "RESUMED";
-    // 用户单聊发消息给机器人
-    static constexpr FixedString C2CMessageCreate = "C2C_MESSAGE_CREATE";
-    // 用户添加使用机器人
-    static constexpr FixedString FriendAdd = "FRIEND_ADD";
-    // 用户删除机器人
-    static constexpr FixedString FriendDel = "FRIEND_DEL";
-    // 用户在机器人资料卡手动关闭"主动消息"推送
-    static constexpr FixedString C2CMsgReject = "C2C_MSG_REJECT";
-    // 用户在机器人资料卡手动开启"主动消息"推送开关
-    static constexpr FixedString C2CMsgReceived = "C2C_MSG_RECEIVE";
-    // 用户在群里@机器人时收到的消息
-    static constexpr FixedString GroupAtMessageCreate = "GROUP_AT_MESSAGE_CREATE";
-    // 机器人被添加到群聊
-    static constexpr FixedString GroupAddRobot = "GROUP_ADD_ROBOT";
-    // 机器人被移出群聊
-    static constexpr FixedString GroupDelRobot = "GROUP_DEL_ROBOT";
-    // 群管理员主动在机器人资料页操作关闭通知
-    static constexpr FixedString GroupMsgReject = "GROUP_MSG_REJECT";
-    // 群管理员主动在机器人资料页操作开启通知
-    static constexpr FixedString GroupMsgReceive = "GROUP_MSG_RECEIVE";
-    // 机器人收到了群聊消息
-    static constexpr FixedString GroupMessageCreate = "GROUP_MESSAGE_CREATE";
-    // 群用户添加
-    static constexpr FixedString GroupMemberAdd = "GROUP_MEMBER_ADD";
-    // 群用户移除
-    static constexpr FixedString GroupMemberRemove = "GROUP_MEMBER_REMOVE";
-    // 用户申请加群
-    static constexpr FixedString GroupJoinRequest = "GROUP_JOIN_REQUEST";
-};
-
-typedef nlohmann::json(*DispatchAction)(const nlohmann::json& data);
-
-template<FixedString T, DispatchAction F>
-struct Dispatcher
-{
-    static constexpr std::string_view type = T.data;
-    static constexpr DispatchAction action = F;
-};
-
-template <drogon::HttpMethod method>
-using HttpMethodType = std::integral_constant<drogon::HttpMethod, method>;
-
-using HttpMethodVariant = std::variant<
-    HttpMethodType<drogon::Get>,
-    HttpMethodType<drogon::Post>, 
-    HttpMethodType<drogon::Delete>, 
-    HttpMethodType<drogon::Patch>, 
-    HttpMethodType<drogon::Put>
->;
-
-using JsonMethod = std::pair<nlohmann::json, HttpMethodVariant>;
-
-template<typename T> requires std::same_as<std::decay_t<T>, JsonMethod>
-drogon::HttpRequestPtr toRequestPtr(T&& obj)
-{
-    auto&& [data, method] = obj;
-    auto req = drogon::HttpRequest::newHttpRequest();
-    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-    std::visit([&](auto&& x) {
-        req->setMethod(x.value);
-        if constexpr (x.value == drogon::Get)
-        {
-            for (auto&& [key, val] : data.items())
-            {
-                req->setParameter(key, val);
-            }
-        }
-        else
-        {
-            req->setBody(data.dump());
-        }
-    }, method);
-    return req;
-}
-
-template<typename T> requires std::same_as<std::decay_t<T>, nlohmann::json>
-drogon::HttpRequestPtr toRequestPtr(T&& obj)
-{
-    auto req = drogon::HttpRequest::newHttpRequest();
-    req->setMethod(drogon::Post);
-    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-    req->setBody(obj.dump());
-    return req;
-}
-
-namespace drogon {
-    template<>
-    HttpRequestPtr toRequest(JsonMethod&& obj)
-    {
-        return toRequestPtr(obj);
-    }
-
-    template<>
-    HttpRequestPtr toRequest(const JsonMethod& obj)
-    {
-        return toRequestPtr(obj);
-    }
-
-    template<>
-    HttpRequestPtr toRequest(JsonMethod& obj)
-    {
-        return toRequestPtr(obj);
-    }
-
-    template<>
-    HttpRequestPtr toRequest(nlohmann::json&& obj)
-    {
-        return toRequestPtr(obj);
-    }
-
-    template<>
-    HttpRequestPtr toRequest(const nlohmann::json& obj)
-    {
-        return toRequestPtr(obj);
-    }
-
-    template<>
-    HttpRequestPtr toRequest(nlohmann::json& obj)
-    {
-        return toRequestPtr(obj);
-    }
-
-    template<>
-    nlohmann::json fromResponse(const HttpResponse& resp)
-    {
-        return nlohmann::json::parse(resp.body());
-    }
-}
+using qbot::DispatchType;
+using qbot::Dispatcher;
+using qbot::HttpMethodType;
+using qbot::JsonMethod;
+using qbot::ConnectToWSServer;
 
 static std::string& getGlobalAccessToken()
 {
@@ -275,7 +121,6 @@ static void initEnv()
     drogon::app()
         .setThreadNum(0)
         .registerPostHandlingAdvice(HttpLogger)
-        .addListener("0.0.0.0", 8080)
         .loadConfigFile("config.yml");
     spdlog::default_logger()->set_level(spdlog::level::level_enum{ trantor::Logger::logLevel() });
     std::signal(SIGTERM, [](int) {
@@ -470,7 +315,7 @@ static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload,const s
     co_return ret;
 }
 
-static drogon::Task<nlohmann::json> PutPanelsTarget(const nlohmann::json& payload, const std::string& panelId, const std::string token)
+static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json& payload, const std::string& panelId, const std::string token)
 {
     auto path = std::format("/v2/panels/{}/target", panelId);
     nlohmann::json ret = co_await CallQBotApiAsync<drogon::Put>(path, payload, token);
@@ -575,9 +420,6 @@ static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSock
     {
         SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
         connection->send(payload.dump());
-        drogon::app().getLoop()->queueInLoop(drogon::async_func([]() -> drogon::Task<> { 
-            co_await Panels<drogon::Get>({ {"scope","c2c"} }, getGlobalAccessToken()); 
-        }));
         return;
     }
 }
@@ -686,24 +528,6 @@ static void QBotMessageHandler(std::string&& msg, const drogon::WebSocketClientP
     }
 }
 
-template<FixedString schema>
-static drogon::WebSocketClientPtr ConnectToWSGateway(const std::string gateway, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler)
-{
-    auto pos = gateway.find("/", schema.length());
-    auto host = gateway.substr(0, pos);
-    auto path = gateway.substr(pos);
-    auto client = drogon::WebSocketClient::newWebSocketClient(host);
-    client->setMessageHandler(messageHandler);
-    client->setConnectionClosedHandler(closedHandler);
-    auto req = drogon::HttpRequest::newHttpRequest();
-    req->setPath(path);
-    client->connectToServer(req, [gateway](drogon::ReqResult, const drogon::HttpResponsePtr&, const drogon::WebSocketClientPtr& client){
-        SPDLOG_INFO("{} is connected!", gateway);
-        client->getConnection()->setContext(std::make_shared<std::string>(gateway));
-    });
-    return client;
-}
-
 static void QBotClosedHandler(const drogon::WebSocketClientPtr& client)
 {
     auto& cacheMap = getGlobalClientCache();
@@ -711,7 +535,7 @@ static void QBotClosedHandler(const drogon::WebSocketClientPtr& client)
     cacheMap.modify(gateway, [](drogon::WebSocketClientPtr& pClient) {
         auto gateway = *pClient->getConnection()->getContext<std::string>();
         SPDLOG_INFO(QBOT_TAG "reconnect to {}", gateway);
-        pClient = ConnectToWSGateway<"wss://">(gateway, QBotMessageHandler, QBotClosedHandler);
+        pClient = ConnectToWSServer(gateway, QBotMessageHandler, QBotClosedHandler);
     });
 }
 
@@ -737,7 +561,7 @@ static drogon::Task<> Start()
         drogon::app().quit();
         co_return;
     }
-    auto client = ConnectToWSGateway<"wss://">(gateway, QBotMessageHandler, QBotClosedHandler);
+    auto client = ConnectToWSServer(gateway, QBotMessageHandler, QBotClosedHandler);
     getGlobalClientCache().insert(gateway, client);
 }
 

@@ -1,0 +1,100 @@
+#include "qbot_tools.h"
+#include <spdlog/spdlog.h>
+
+using namespace std::literals;
+
+namespace qbot {
+    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler)
+    {
+        auto pos = url.find("/", url.starts_with("ws://"sv) ? "ws://"sv.length() : "wss://"sv.length());
+        auto host = url.substr(0, pos);
+        auto path = url.substr(pos);
+        auto client = drogon::WebSocketClient::newWebSocketClient(host);
+        client->setMessageHandler(messageHandler);
+        client->setConnectionClosedHandler(closedHandler);
+        auto req = drogon::HttpRequest::newHttpRequest();
+        req->setPath(path);
+        client->connectToServer(req, [url](drogon::ReqResult, const drogon::HttpResponsePtr&, const drogon::WebSocketClientPtr& client) {
+            SPDLOG_INFO("{} is connected!", url);
+            client->getConnection()->setContext(std::make_shared<std::string>(url));
+        });
+        return client;
+    }
+}
+
+template<typename T> requires std::same_as<std::decay_t<T>, qbot::JsonMethod>
+drogon::HttpRequestPtr toRequestPtr(T&& obj)
+{
+    auto&& [data, method] = obj;
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+    std::visit([&](auto&& x) {
+        req->setMethod(x.value);
+        if constexpr (x.value == drogon::Get)
+        {
+            for (auto&& [key, val] : data.items())
+            {
+                req->setParameter(key, val);
+            }
+        }
+        else
+        {
+            req->setBody(data.dump());
+        }
+    }, method);
+    return req;
+}
+
+template<typename T> requires std::same_as<std::decay_t<T>, nlohmann::json>
+drogon::HttpRequestPtr toRequestPtr(T&& obj)
+{
+    auto req = drogon::HttpRequest::newHttpRequest();
+    req->setMethod(drogon::Post);
+    req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+    req->setBody(obj.dump());
+    return req;
+}
+
+namespace drogon {
+    template<>
+    HttpRequestPtr toRequest(qbot::JsonMethod&& obj)
+    {
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(const qbot::JsonMethod& obj)
+    {
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(qbot::JsonMethod& obj)
+    {
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(nlohmann::json&& obj)
+    {
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(const nlohmann::json& obj)
+    {
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    HttpRequestPtr toRequest(nlohmann::json& obj)
+    {
+        return toRequestPtr(obj);
+    }
+
+    template<>
+    nlohmann::json fromResponse(const HttpResponse& resp)
+    {
+        return nlohmann::json::parse(resp.body());
+    }
+}

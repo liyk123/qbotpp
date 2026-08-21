@@ -15,6 +15,8 @@ project (${PROJECT_NAME})
 set(FILE_LIST
     "main.cpp"
     "onebot11.h"
+    "qbot_tools.h"
+    "qbot_tools.cpp"
 )
 
 find_package(Drogon CONFIG REQUIRED)
@@ -77,7 +79,7 @@ add_definitions(-DPROJECT_NAME="${PROJECT_NAME}")
 
 add_executable(${PROJECT_NAME} ${FILE_LIST})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE 
+target_link_libraries(${PROJECT_NAME}  
     PRIVATE Drogon::Drogon
     PRIVATE nlohmann_json::nlohmann_json
 )
