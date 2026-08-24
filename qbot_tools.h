@@ -4,10 +4,34 @@
 #include <nlohmann/json.hpp>
 
 namespace qbot {
-    using WSAsyncMessageHandler = std::function<drogon::Task<void>(std::string&&, const drogon::WebSocketClientPtr&, const drogon::WebSocketMessageType&)>;
     using WSMessageHandler = std::function<void(std::string&&, const drogon::WebSocketClientPtr&, const drogon::WebSocketMessageType&)>;
-    using WSAsyncClosedHandler = std::function<drogon::Task<void>(const drogon::WebSocketClientPtr&)>;
     using WSClosedHandler = std::function<void(const drogon::WebSocketClientPtr&)>;
+    using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
+    using MessageCache = drogon::CacheMap<std::uint32_t, std::string>;
+
+    enum class opcode : std::int32_t
+    {
+        // 服务端进行消息推送
+        Dispatch = 0,
+        // 客户端或服务端发送心跳
+        Heartbeat = 1,
+        // 客户端发送鉴权
+        Identify = 2,
+        // 客户端恢复连接
+        Resume = 6,
+        // 服务端通知客户端重新连接
+        Reconnect = 7,
+        // 当identify或resume的时候，如果参数有错，服务端会返回该消息
+        Invalid = 9,
+        // 当客户端与网关建立ws连接之后，网关下发的第一条消息
+        Hello = 10,
+        // 当发送心跳成功之后，就会收到该消息
+        HeartbeatACK = 11,
+        // 仅用于 http 回调模式的回包，代表机器人收到了平台推送的数据
+        HTTPCallbackACK = 12,
+        // 开放平台对机器人服务端进行验证
+        CallbackAuth = 13
+    };
 
     template<size_t N>
     struct FixedString
