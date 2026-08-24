@@ -2,9 +2,6 @@
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 
-using namespace std::literals;
-
-constexpr auto versionInfo = "Branch: " GIT_BRANCH "\nCommit: " GIT_VERSION "\nDate: " GIT_DATE;
 constexpr auto LogPattern = "%m-%d %H:%M:%S.%e [%^%L%$] [thread:%t] [%s:%#] %v";
 constexpr auto TargetLocaleName = "zh_CN.UTF-8";
 constexpr auto C_LocaleName = "C";
@@ -27,20 +24,9 @@ static void initEnv()
     });
 }
 
-static void AppVersionHandler(const drogon::HttpRequestPtr& req, drogon::AdviceCallback&& callback)
-{
-    auto resp = drogon::HttpResponse::newHttpResponse();
-    resp->setPassThrough(true);
-    resp->setBody(versionInfo);
-    resp->setContentTypeCode(drogon::ContentType::CT_TEXT_HTML);
-    callback(resp);
-};
-
 int main() 
 {
     initEnv();
-    drogon::app()
-        .registerHandler("/", &AppVersionHandler, { drogon::Get })
-        .run();
+    drogon::app().run();
     return 0;
 }

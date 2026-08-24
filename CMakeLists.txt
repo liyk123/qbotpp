@@ -14,6 +14,8 @@ project (${PROJECT_NAME})
 
 set(FILE_LIST
     "main.cpp"
+    "AppVersion.h"
+    "AppVersion.cc"
     "onebot11.h"
     "qbot_Instance.h"
     "qbot_Instance.cc"
