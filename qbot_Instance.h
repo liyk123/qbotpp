@@ -30,6 +30,10 @@ namespace qbot {
         {
             m_dispatchMap[type.data].emplace_back(action);
         }
+
+        drogon::Task<nlohmann::json> sendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId);
+
+        drogon::Task<nlohmann::json> sendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId);
     private:
         std::shared_mutex m_tokenMutex{};
         std::string m_accessToken{};

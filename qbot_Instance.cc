@@ -253,48 +253,6 @@ static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json& pay
     co_return ret;
 }
 
-static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
-{
-    drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
-        nlohmann::json payload{
-            {"markdown", {{"content", data["d"]["content"]}}},
-            {"msg_type", 2},
-            {"msg_id", data["d"]["id"]}
-        };
-        auto& userOpenId = data["d"]["author"]["user_openid"];
-        co_await SendC2CMessageAsync(payload, userOpenId, getInstance()->getAccessToken());
-    }));
-    return {};
-}
-
-static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
-{
-    drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
-        nlohmann::json payload{
-            {"markdown", {{"content", data["d"]["content"]}}},
-            {"msg_type", 2},
-            {"msg_id", data["d"]["id"]}
-        };
-        auto& userOpenId = data["d"]["group_openid"];
-        co_await SendGroupMessageAsync(payload, userOpenId, getInstance()->getAccessToken());
-    }));
-    return {};
-}
-
-static nlohmann::json DispatchGroupAtMessageCreate(const nlohmann::json& data)
-{
-    drogon::app().getLoop()->queueInLoop(drogon::async_func([data]() -> drogon::Task<> {
-        nlohmann::json payload{
-            {"markdown", {{"content", data["d"]["content"]}}},
-            {"msg_type", 2},
-            {"msg_id", data["d"]["id"]}
-        };
-        auto& userOpenId = data["d"]["group_openid"];
-        co_await SendGroupMessageAsync(payload, userOpenId, getInstance()->getAccessToken());
-    }));
-    return {};
-}
-
 static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSocketConnectionPtr& connection)
 {
     auto type = data["t"].get<std::string_view>();
@@ -453,7 +411,7 @@ namespace qbot {
 
     void Instance::shutdown()
     {
-        LOG_WARN << "quit";
+        LOG_WARN << "down";
     }
 
     drogon::HttpClientPtr Instance::getApiClient()
@@ -496,5 +454,15 @@ namespace qbot {
     const DispatchMap& qbot::Instance::getDispatchMap()
     {
         return m_dispatchMap;
+    }
+
+    drogon::Task<nlohmann::json> Instance::sendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId)
+    {
+        return SendC2CMessageAsync(payload, openId, getAccessToken());
+    }
+
+    drogon::Task<nlohmann::json> Instance::sendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId)
+    {
+        return SendGroupMessageAsync(payload, openId, getAccessToken());
     }
 }

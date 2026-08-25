@@ -21,6 +21,8 @@ set(FILE_LIST
     "qbot_Instance.cc"
     "qbot_tools.h"
     "qbot_tools.cpp"
+    "qbot_Echo.h"
+    "qbot_Echo.cc"
 )
 
 find_package(Drogon CONFIG REQUIRED)
