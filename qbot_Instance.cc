@@ -2,20 +2,41 @@
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
-#include "qbot_tools.h"
 
 #define QBOT_TAG "\033[36mQBot\033[0m "
 
 using namespace std::literals;
-using qbot::Dispatcher;
 using qbot::DispatchType;
 using qbot::JsonMethod;
-using qbot::opcode;
 using qbot::HttpMethodType;
 
 constexpr auto QBotUniversalUrl = "https://api.bot.qq.com";
 constexpr auto QBotSandboxUrl = "https://sandbox.api.sgroup.qq.com";
 constexpr auto GROUP_AND_C2C_EVENT = 1U << 25 | 1U << 24;
+
+enum class opcode : std::int32_t
+{
+    // 服务端进行消息推送
+    Dispatch = 0,
+    // 客户端或服务端发送心跳
+    Heartbeat = 1,
+    // 客户端发送鉴权
+    Identify = 2,
+    // 客户端恢复连接
+    Resume = 6,
+    // 服务端通知客户端重新连接
+    Reconnect = 7,
+    // 当identify或resume的时候，如果参数有错，服务端会返回该消息
+    Invalid = 9,
+    // 当客户端与网关建立ws连接之后，网关下发的第一条消息
+    Hello = 10,
+    // 当发送心跳成功之后，就会收到该消息
+    HeartbeatACK = 11,
+    // 仅用于 http 回调模式的回包，代表机器人收到了平台推送的数据
+    HTTPCallbackACK = 12,
+    // 开放平台对机器人服务端进行验证
+    CallbackAuth = 13
+};
 
 static qbot::Instance* getInstance()
 {
@@ -274,63 +295,26 @@ static nlohmann::json DispatchGroupAtMessageCreate(const nlohmann::json& data)
     return {};
 }
 
-static nlohmann::json DispatchFriendAdd(const nlohmann::json& data)
-{
-    return {};
-}
-
-static nlohmann::json DispatchFriendDel(const nlohmann::json& data)
-{
-    return {};
-}
-
-static nlohmann::json DispatchGroupAddRobot(const nlohmann::json& data)
-{
-    return {};
-}
-
-static nlohmann::json DispatchGroupDelRobot(const nlohmann::json& data)
-{
-    return {};
-}
-
-static nlohmann::json DispatchGroupJoinRequest(const nlohmann::json& data)
-{
-    return {};
-}
-
-template<typename... Ds>
-nlohmann::json _dispacher_construct(const std::string_view type, const nlohmann::json& data)
-{
-    auto payload = nlohmann::json{};
-    ([&] { return type == Ds::type ? (payload = Ds::action(data), true) : false; }() || ...);
-    return payload;
-}
-
 static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSocketConnectionPtr& connection)
 {
     auto type = data["t"].get<std::string_view>();
-    auto payload = _dispacher_construct<
-        Dispatcher<DispatchType::Ready, DispatchReady>,
-        Dispatcher<DispatchType::Resumed, DispatchResumed>,
-        Dispatcher<DispatchType::C2CMessageCreate, DispatchC2CMessageCreate>,
-        Dispatcher<DispatchType::GroupMessageCreate, DispatchGroupMessageCreate>,
-        Dispatcher<DispatchType::GroupAtMessageCreate, DispatchGroupAtMessageCreate>,
-        Dispatcher<DispatchType::FriendAdd, DispatchFriendAdd>,
-        Dispatcher<DispatchType::FriendDel, DispatchFriendDel>,
-        Dispatcher<DispatchType::GroupAddRobot, DispatchGroupAddRobot>,
-        Dispatcher<DispatchType::GroupDelRobot, DispatchGroupDelRobot>,
-        Dispatcher<DispatchType::GroupJoinRequest, DispatchGroupJoinRequest>
-    >(type, data);
-    if (payload.is_null())
+    if (type == DispatchType::Ready.data)
     {
-        return;
-    }
-    if (type == DispatchType::Ready.data || type == DispatchType::Resumed.data)
-    {
+        auto payload = DispatchReady(data);
         SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
         connection->send(payload.dump());
         return;
+    }
+    if (type == DispatchType::Resumed.data)
+    {
+        auto payload = DispatchResumed(data);
+        SPDLOG_INFO(QBOT_TAG "SEND {}", payload.dump());
+        connection->send(payload.dump());
+        return;
+    }
+    for (auto&& action : getInstance()->getDispatchMap().at(type))
+    {
+        action(data);
     }
 }
 
@@ -507,5 +491,10 @@ namespace qbot {
     std::atomic_llong& Instance::seq()
     {
         return m_seq;
+    }
+
+    const DispatchMap& qbot::Instance::getDispatchMap()
+    {
+        return m_dispatchMap;
     }
 }

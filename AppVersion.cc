@@ -4,9 +4,9 @@ constexpr auto versionInfo = "Branch: " GIT_BRANCH "\nCommit: " GIT_VERSION "\nD
 
 void AppVersion::asyncHandleHttpRequest(const HttpRequestPtr& req, std::function<void (const HttpResponsePtr &)> &&callback)
 {
-    auto resp = drogon::HttpResponse::newHttpResponse();
+    auto resp = HttpResponse::newHttpResponse();
     resp->setPassThrough(true);
     resp->setBody(versionInfo);
-    resp->setContentTypeCode(drogon::ContentType::CT_TEXT_HTML);
+    resp->setContentTypeCode(ContentType::CT_TEXT_HTML);
     callback(resp);
 }
