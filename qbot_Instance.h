@@ -17,6 +17,7 @@ namespace qbot {
         void shutdown() override;
     public:
         drogon::HttpClientPtr getApiClient();
+        std::string getAppId();
         void setWSClient(const drogon::WebSocketClientPtr& client);
         std::string getAccessToken();
         void setAccessToken(const std::string token);

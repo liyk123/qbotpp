@@ -382,7 +382,7 @@ static void MessageHandler(std::string&& msg, const drogon::WebSocketClientPtr& 
 
 static void ClosedHandler(const drogon::WebSocketClientPtr& client)
 {
-    auto gateway = *client->getConnection()->getContext<std::string>();
+    auto [gateway, _] = *client->getConnection()->getContext<std::pair<std::string,std::string>>();
     SPDLOG_INFO(QBOT_TAG "reconnect to {}", gateway);
     auto newClient = qbot::ConnectToWSServer(gateway, MessageHandler, ClosedHandler);
     drogon::app().getPlugin<qbot::Instance>()->setWSClient(newClient);
@@ -417,6 +417,11 @@ namespace qbot {
     drogon::HttpClientPtr Instance::getApiClient()
     {
         return m_apiClient;
+    }
+
+    std::string Instance::getAppId()
+    {
+        return m_appId;
     }
 
     void Instance::setWSClient(const drogon::WebSocketClientPtr& client)
