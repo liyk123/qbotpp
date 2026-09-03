@@ -4,7 +4,7 @@
 using namespace std::literals;
 
 namespace qbot {
-    drogon::WebSocketClientPtr qbot::ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const std::string token)
+    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const std::string token)
     {
         auto pos = url.find("/", url.starts_with("ws://"sv) ? "ws://"sv.length() : "wss://"sv.length());
         auto host = url.substr(0, pos);
