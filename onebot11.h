@@ -1,5 +1,4 @@
 #pragma once
-#include <variant>
 #include <nlohmann/json.hpp>
 
 namespace onebot {
@@ -24,10 +23,11 @@ namespace onebot {
             nlohmann::json message; //消息
             std::string raw_message; //原始文本消息（含有CQ码）
 
-            struct Sender
+            struct OpenQQEXT
             {
-                std::string openid;// QQ开放平台ID
-            }sender;
+                std::string user_openid;
+                std::string message_openid;
+            } open_qq_ext;
         };
 
         NLOHMANN_JSON_SERIALIZE_ENUM(PrivateMsg::SubType, {
@@ -36,9 +36,9 @@ namespace onebot {
             {PrivateMsg::SubType::OTHER, "other"},
         })
 
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(PrivateMsg::Sender, openid)
-
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(PrivateMsg, post_type, sub_type, message_type, time, user_id, self_id, message_id, message, raw_message, sender)
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(PrivateMsg::OpenQQEXT, user_openid, message_openid)
+        
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(PrivateMsg, post_type, sub_type, message_type, time, user_id, self_id, message_id, message, raw_message, open_qq_ext)
 
         struct GroupMsg
         {
@@ -64,8 +64,6 @@ namespace onebot {
 
             struct Sender
             {
-                std::string user_openid; // QQ用户开放平台ID
-                std::string group_openid; // QQ群开放平台ID
                 std::string nickname; // 昵称
 
                 enum Role // 权限级别
@@ -75,6 +73,13 @@ namespace onebot {
                     MEMBER// 普通群成员
                 } role;
             }sender;
+
+            struct OpenQQEXT
+            {
+                std::string user_openid;
+                std::string group_openid;
+                std::string message_openid;
+            } open_qq_ext;
         };
 
         NLOHMANN_JSON_SERIALIZE_ENUM(GroupMsg::SubType, {
@@ -88,10 +93,12 @@ namespace onebot {
             {GroupMsg::Sender::Role::MEMBER, "member"},
             {GroupMsg::Sender::Role::OWNER, "owner"}
         })
-        
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupMsg::Sender, user_openid, group_openid, nickname, role)
 
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupMsg, post_type, sub_type, message_type, time, user_id, self_id, group_id, message_id, message, raw_message, sub_type, sender)
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupMsg::OpenQQEXT, user_openid, group_openid, message_openid)
+        
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupMsg::Sender, nickname, role)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupMsg, post_type, sub_type, message_type, time, user_id, self_id, group_id, message_id, message, raw_message, sub_type, sender, open_qq_ext)
 
         struct LifecycleEvent
         {
@@ -140,7 +147,7 @@ namespace onebot {
         struct GroupUploadNotice
         {
             static constexpr std::string_view post_type = "notice";
-            static constexpr std::string_view meta_event_type = "group_upload";
+            static constexpr std::string_view notice_type = "group_upload";
 
             uint64_t time; // 事件产生的时间
             uint64_t self_id; // 机器人自身QQ
@@ -153,11 +160,19 @@ namespace onebot {
                 uint64_t size;  // 文件大小(byte)
                 std::string url; // 文件地址
             } file;
+
+            struct OpenQQEXT
+            {
+                std::string group_openid;
+                std::string user_openid;
+            } open_qq_ext;
         };
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupUploadNotice::File, name, size, url)
 
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupUploadNotice, time, user_id, self_id, group_id, file)
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupUploadNotice::OpenQQEXT, group_openid, user_openid)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupUploadNotice, post_type, notice_type, time, user_id, self_id, group_id, file, open_qq_ext)
 
         //struct GroupAdminNotice
         //{
@@ -195,7 +210,23 @@ namespace onebot {
                 KICK,       // 被踢出
                 KICK_ME,    // 机器人被踢出
             } sub_type;
+
+            struct OpenQQEXT
+            {
+                std::string group_openid;
+                std::string user_openid;
+            } open_qq_ext;
         };
+
+        NLOHMANN_JSON_SERIALIZE_ENUM(GroupDecreaseNotice::SUB_TYPE, {
+            {GroupDecreaseNotice::SUB_TYPE::LEAVE, "leave"},
+            {GroupDecreaseNotice::SUB_TYPE::KICK, "kick"},
+            {GroupDecreaseNotice::SUB_TYPE::KICK_ME, "kick_me"}
+        })
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupDecreaseNotice::OpenQQEXT, group_openid, user_openid)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupDecreaseNotice, post_type, notice_type, time, user_id, self_id, group_id, operator_id, sub_type, open_qq_ext)
 
         struct GroupInceaseNotice
         {
@@ -213,7 +244,22 @@ namespace onebot {
                 APPROVE, // 同意入群
                 INVITE,  // 邀请入群
             } sub_type;
+            
+            struct OpenQQEXT
+            {
+                std::string group_openid;
+                std::string user_openid;
+            } open_qq_ext;
         };
+
+        NLOHMANN_JSON_SERIALIZE_ENUM(GroupInceaseNotice::SUB_TYPE, {
+            {GroupInceaseNotice::SUB_TYPE::APPROVE, "approve"},
+            {GroupInceaseNotice::SUB_TYPE::INVITE, "invite"}
+        })
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupInceaseNotice::OpenQQEXT, group_openid, user_openid)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupInceaseNotice, post_type, notice_type, time, user_id, self_id, group_id, operator_id, sub_type, open_qq_ext)
 
         //struct GroupBanNotice
         //{
@@ -244,8 +290,16 @@ namespace onebot {
             uint64_t time; // 事件产生的时间
             uint64_t self_id; // 机器人自身QQ
             uint64_t user_id; // 新添加好友 QQ 号
-            std::string openid; // QQ开放平台ID
+
+            struct OpenQQEXT
+            {
+                std::string user_openid;
+            } open_qq_ext;
         };
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(FriendAddNotice::OpenQQEXT, user_openid)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(FriendAddNotice, post_type, notice_type, time, user_id, self_id, open_qq_ext)
 
         struct FriendDelNotice
         {
@@ -255,8 +309,16 @@ namespace onebot {
             uint64_t time; // 事件产生的时间
             uint64_t self_id; // 机器人自身QQ
             uint64_t user_id; // 用户 QQ 号
-            std::string openid; // QQ开放平台ID
+
+            struct OpenQQEXT
+            {
+                std::string user_openid;
+            } open_qq_ext;
         };
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(FriendDelNotice::OpenQQEXT, user_openid)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(FriendDelNotice, post_type, notice_type, time, user_id, self_id, open_qq_ext)
 
         // 群消息撤回事件
         //struct GroupRecallNotice
