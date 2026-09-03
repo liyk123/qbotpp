@@ -228,7 +228,7 @@ namespace onebot {
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupDecreaseNotice, post_type, notice_type, time, user_id, self_id, group_id, operator_id, sub_type, open_qq_ext)
 
-        struct GroupInceaseNotice
+        struct GroupIncreaseNotice
         {
             static constexpr std::string_view post_type = "notice";
             static constexpr std::string_view notice_type = "group_increase";
@@ -252,14 +252,14 @@ namespace onebot {
             } open_qq_ext;
         };
 
-        NLOHMANN_JSON_SERIALIZE_ENUM(GroupInceaseNotice::SUB_TYPE, {
-            {GroupInceaseNotice::SUB_TYPE::APPROVE, "approve"},
-            {GroupInceaseNotice::SUB_TYPE::INVITE, "invite"}
+        NLOHMANN_JSON_SERIALIZE_ENUM(GroupIncreaseNotice::SUB_TYPE, {
+            {GroupIncreaseNotice::SUB_TYPE::APPROVE, "approve"},
+            {GroupIncreaseNotice::SUB_TYPE::INVITE, "invite"}
         })
 
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupInceaseNotice::OpenQQEXT, group_openid, user_openid)
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupIncreaseNotice::OpenQQEXT, group_openid, user_openid)
 
-        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupInceaseNotice, post_type, notice_type, time, user_id, self_id, group_id, operator_id, sub_type, open_qq_ext)
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupIncreaseNotice, post_type, notice_type, time, user_id, self_id, group_id, operator_id, sub_type, open_qq_ext)
 
         //struct GroupBanNotice
         //{
