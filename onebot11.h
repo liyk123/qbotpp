@@ -174,25 +174,6 @@ namespace onebot {
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupUploadNotice, post_type, notice_type, time, user_id, self_id, group_id, file, open_qq_ext)
 
-        //struct GroupAdminNotice
-        //{
-        //    static constexpr EventType getType()
-        //    {
-        //        return { "notice", "group_admin" };
-        //    }
-
-        //    uint64_t time; // 事件产生的时间
-        //    uint64_t self_id; // 机器人自身QQ
-        //    uint64_t group_id; // 群QQ
-        //    uint64_t user_id; // 管理员的QQ
-
-        //    enum SUB_TYPE // 事件子类型
-        //    {
-        //        SET,   // 设置
-        //        UNSET, // 取消设置
-        //    } sub_type; 
-        //};
-
         struct GroupDecreaseNotice
         {
             static constexpr std::string_view post_type = "notice";
@@ -204,7 +185,7 @@ namespace onebot {
             uint64_t user_id; // 用户QQ
             uint64_t operator_id; // 操作者QQ 如果是主动退群，和user_id一致
 
-            enum SUB_TYPE // 事件子类型
+            enum SubType // 事件子类型
             {
                 LEAVE,      // 退出
                 KICK,       // 被踢出
@@ -218,10 +199,10 @@ namespace onebot {
             } open_qq_ext;
         };
 
-        NLOHMANN_JSON_SERIALIZE_ENUM(GroupDecreaseNotice::SUB_TYPE, {
-            {GroupDecreaseNotice::SUB_TYPE::LEAVE, "leave"},
-            {GroupDecreaseNotice::SUB_TYPE::KICK, "kick"},
-            {GroupDecreaseNotice::SUB_TYPE::KICK_ME, "kick_me"}
+        NLOHMANN_JSON_SERIALIZE_ENUM(GroupDecreaseNotice::SubType, {
+            {GroupDecreaseNotice::SubType::LEAVE, "leave"},
+            {GroupDecreaseNotice::SubType::KICK, "kick"},
+            {GroupDecreaseNotice::SubType::KICK_ME, "kick_me"}
         })
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupDecreaseNotice::OpenQQEXT, group_openid, user_openid)
@@ -239,7 +220,7 @@ namespace onebot {
             uint64_t user_id; // 用户QQ
             uint64_t operator_id; // 操作者QQ 如果是主动加群，和user_id一致
 
-            enum SUB_TYPE // 事件子类型
+            enum SubType // 事件子类型
             {
                 APPROVE, // 同意入群
                 INVITE,  // 邀请入群
@@ -252,35 +233,14 @@ namespace onebot {
             } open_qq_ext;
         };
 
-        NLOHMANN_JSON_SERIALIZE_ENUM(GroupIncreaseNotice::SUB_TYPE, {
-            {GroupIncreaseNotice::SUB_TYPE::APPROVE, "approve"},
-            {GroupIncreaseNotice::SUB_TYPE::INVITE, "invite"}
+        NLOHMANN_JSON_SERIALIZE_ENUM(GroupIncreaseNotice::SubType, {
+            {GroupIncreaseNotice::SubType::APPROVE, "approve"},
+            {GroupIncreaseNotice::SubType::INVITE, "invite"}
         })
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupIncreaseNotice::OpenQQEXT, group_openid, user_openid)
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupIncreaseNotice, post_type, notice_type, time, user_id, self_id, group_id, operator_id, sub_type, open_qq_ext)
-
-        //struct GroupBanNotice
-        //{
-        //    static constexpr EventType getType()
-        //    {
-        //        return { "notice", "group_ban" };
-        //    }
-
-        //    uint64_t time; // 事件产生的时间
-        //    uint64_t self_id; // 机器人自身QQ
-        //    uint64_t group_id; // 群QQ
-        //    uint64_t user_id; // 被禁言的人的QQ
-        //    uint64_t operator_id; // 操作者QQ 如果是主动禁言，和user_id一致
-        //    uint64_t duration; //禁言时长，单位秒
-
-        //    enum SUB_TYPE // 事件子类型
-        //    {
-        //        BAN,      // 禁言
-        //        LIFT_BAN, // 解除禁言
-        //    } sub_type; 
-        //};
 
         struct FriendAddNotice
         {
@@ -320,63 +280,39 @@ namespace onebot {
 
         NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(FriendDelNotice, post_type, notice_type, time, user_id, self_id, open_qq_ext)
 
-        // 群消息撤回事件
-        //struct GroupRecallNotice
-        //{
-        //    static constexpr EventType getType()
-        //    {
-        //        return { "notice", "group_recall" };
-        //    }
+        struct GroupJoinRequest
+        {
+            static constexpr std::string_view post_type = "request";
+            static constexpr std::string_view request_type = "group";
 
-        //    uint64_t time; // 事件产生的时间
-        //    uint64_t self_id; // 机器人自身QQ
-        //    uint64_t group_id; // 群QQ
-        //    uint64_t message_id; // 消息ID
-        //    uint64_t user_id; // 发送者QQ
-        //    uint64_t operator_id; // 操作者QQ
-        //};
+            enum SubType // 事件子类型
+            {
+                ADD, // 加群请求
+                INVITE // 邀请登录号入群
+            }sub_type;
 
-        // 好友消息撤回事件
-        //struct FriendRecallNotice
-        //{
-        //    static constexpr EventType getType()
-        //    {
-        //        return { "notice", "friend_recall" };
-        //    }
+            uint64_t time; // 事件发生的时间戳
+            uint64_t self_id; // 收到事件的机器人 QQ 号
+            uint64_t group_id; // 群号
+            uint64_t user_id; // 发送请求的 QQ 号
+            std::string comment; // 验证信息
+            std::string flag; // 请求 flag，在调用处理请求的 API 时需要传入
 
-        //    uint64_t time; // 事件产生的时间
-        //    uint64_t self_id; // 机器人自身QQ
-        //    uint64_t user_id; // 发送者QQ
-        //    uint64_t message_id; // 消息ID
-        //};
+            struct OpenQQEXT
+            {
+                std::string group_openid;
+                std::string user_openid;
+            } open_qq_ext;
+        };
 
-        // 群内通知事件，如戳一戳、群红包运气王、群成员荣誉变更
-        //struct GroupNotifyNotice
-        //{
-        //    static constexpr EventType getType()
-        //    {
-        //        return { "notice", "group_notify" };
-        //    }
+        NLOHMANN_JSON_SERIALIZE_ENUM(GroupJoinRequest::SubType, {
+            {GroupJoinRequest::SubType::ADD, "add"},
+            {GroupJoinRequest::SubType::INVITE, "invite"}
+        })
 
-        //    uint64_t time; // 事件产生的时间
-        //    uint64_t self_id; // 机器人自身QQ
-        //    uint64_t group_id; // 群QQ
-        //    uint64_t user_id; // 发送者QQ,如戳一戳的发送者，红包的发送者，荣誉变更者
-        //    enum SUB_TYPE
-        //    {
-        //        POKE, //戳一戳
-        //        LUCKY_KING, //群红包运气王
-        //        HONOR, //群成员荣誉变更
-        //    } sub_type; // 事件子类型，分别表示戳一戳、群红包运气王、群成员荣誉变更
-        //    std::optional<uint64_t> target_id = std::nullopt; // 如果是戳一戳，则为被戳的人的QQ，如果是群红包运气王，则为群红包的ID
-        //    enum HonorType
-        //    {
-        //        TALKATIVE, // 龙王
-        //        PERFORMER, // 群聊之火
-        //        EMOTION,   // 快乐源泉
-        //    };
-        //    std::optional<HonorType> honor_type = std::nullopt; // 荣誉类型
-        //};
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupJoinRequest::OpenQQEXT, group_openid, user_openid)
+
+        NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_ONLY_SERIALIZE(GroupJoinRequest, sub_type, time, self_id, group_id, user_id, comment, flag, open_qq_ext)
     }
 
     namespace API {

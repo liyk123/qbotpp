@@ -23,10 +23,13 @@ set(FILE_LIST
     "qbot_tools.cpp"
     "qbot_Echo.h"
     "qbot_Echo.cc"
+    "onebot_Instance.h"
+    "onebot_Instance.cc"
 )
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(xxHash CONFIG REQUIRED)
 
 
 macro(get_git_hash _git_hash)
@@ -88,6 +91,7 @@ add_executable(${PROJECT_NAME} ${FILE_LIST})
 target_link_libraries(${PROJECT_NAME}  
     PRIVATE Drogon::Drogon
     PRIVATE nlohmann_json::nlohmann_json
+    PRIVATE xxHash::xxhash
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)

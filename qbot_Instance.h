@@ -29,7 +29,7 @@ namespace qbot {
         template<FixedString type>
         void registerDispatchAction(DispatchAction&& action)
         {
-            m_dispatchMap[type.data].emplace_back(action);
+            m_dispatchMap[type.data].emplace_back(std::move(action));
         }
 
         drogon::Task<nlohmann::json> sendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId);

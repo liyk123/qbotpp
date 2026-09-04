@@ -1,5 +1,6 @@
 {
   "dependencies": [
+    "xxhash",
     "nlohmann-json",
     {
       "name": "drogon",
