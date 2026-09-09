@@ -1,6 +1,7 @@
 #pragma once
 #include <drogon/plugins/Plugin.h>
 #include "qbot_tools.h"
+#include "onebot_Event.h"
 
 namespace onebot
 {
@@ -12,7 +13,10 @@ namespace onebot
         void shutdown() override;
     public:
         qbot::ClientCache& clientCache();
+        std::vector<std::string>& urlArray();
+        void dispatch(std::shared_ptr<onebot::Event::Variant> data);
     private:
         qbot::ClientCache m_clientCache{drogon::app().getLoop()};
+        std::vector<std::string> m_urlArray{};
     };
 }

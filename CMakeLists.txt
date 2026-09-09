@@ -16,7 +16,10 @@ set(FILE_LIST
     "main.cpp"
     "AppVersion.h"
     "AppVersion.cc"
-    "onebot11.h"
+    "onebot_Event.h"
+    "onebot_Event.cpp"
+    "onebot_API.h"
+    "onebot_API.cpp"
     "qbot_Instance.h"
     "qbot_Instance.cc"
     "qbot_tools.h"
@@ -25,7 +28,7 @@ set(FILE_LIST
     "qbot_Echo.cc"
     "onebot_Instance.h"
     "onebot_Instance.cc"
-)
+ )
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)

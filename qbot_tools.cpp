@@ -4,7 +4,7 @@
 using namespace std::literals;
 
 namespace qbot {
-    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const std::string token)
+    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const drogon::WebSocketRequestCallback& requestCallback, const std::span<std::pair<std::string, std::string>>& headers)
     {
         auto pos = url.find("/", url.starts_with("ws://"sv) ? "ws://"sv.length() : "wss://"sv.length());
         auto host = url.substr(0, pos);
@@ -14,19 +14,11 @@ namespace qbot {
         client->setConnectionClosedHandler(closedHandler);
         auto req = drogon::HttpRequest::newHttpRequest();
         req->setPath(path);
-        if (!token.empty())
+        for (auto&& [key, val] : headers)
         {
-            req->addHeader("Authorization", "Bearer " + token);
+            req->addHeader(key, val);
         }
-        client->connectToServer(req, [url, token](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
-            if (r != drogon::ReqResult::Ok)
-            {
-                SPDLOG_ERROR("{} {} {}", url, (int)r, resp->body());
-                return;
-            }
-            SPDLOG_INFO("{} is connected!", url);
-            client->getConnection()->setContext(std::make_shared<std::pair<std::string, std::string>>(url, token));
-        });
+        client->connectToServer(req, requestCallback);
         return client;
     }
 }

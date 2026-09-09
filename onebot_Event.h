@@ -334,5 +334,15 @@ namespace onebot {
             GroupUploadNotice,
             GroupJoinRequest
         >;
+
+        nlohmann::json OnPrivateMsgReveived(const nlohmann::json& data);
+        nlohmann::json OnGroupMsgReveived(const nlohmann::json& data);
+        nlohmann::json onGroupMemberIncreaseNoticeReceived(const nlohmann::json& data);
+        nlohmann::json onGroupMemberLeaveNoticeReceived(const nlohmann::json& data);
+        nlohmann::json onGroupMemberKickMeNoticeReceived(const nlohmann::json& data);
+        nlohmann::json onFriendAddNoticeReceived(const nlohmann::json& data);
+        nlohmann::json onFriendDelNoticeReceived(const nlohmann::json& data);
+        nlohmann::json onGroupMemberJoinRequestReceived(const nlohmann::json& data);
+        nlohmann::json onGroupInviteMeRequestReceived(const nlohmann::json& data);
     }
 }

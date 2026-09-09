@@ -75,7 +75,7 @@ namespace qbot {
 
     using JsonMethod = std::pair<nlohmann::json, HttpMethodVariant>;
 
-    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const std::string token = {});
+    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const drogon::WebSocketRequestCallback& requestCallback, const std::span<std::pair<std::string, std::string>>& headers = {});
 }
 
 namespace drogon {

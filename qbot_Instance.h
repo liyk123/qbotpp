@@ -27,10 +27,7 @@ namespace qbot {
         const DispatchMap& getDispatchMap();
 
         template<FixedString type>
-        void registerDispatchAction(DispatchAction&& action)
-        {
-            m_dispatchMap[type.data].emplace_back(std::move(action));
-        }
+        void registerDispatchAction(DispatchAction&& action);
 
         drogon::Task<nlohmann::json> sendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId);
 
@@ -62,6 +59,7 @@ namespace qbot {
             {DispatchType::GroupMsgReceive.data,{}},
             {DispatchType::GroupMsgReject.data,{}}
         };
+    private:
+        void export_functions();
     };
-
 }

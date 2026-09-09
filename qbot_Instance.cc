@@ -382,16 +382,24 @@ static void MessageHandler(std::string&& msg, const drogon::WebSocketClientPtr& 
 
 static void ClosedHandler(const drogon::WebSocketClientPtr& client)
 {
-    auto [gateway, _] = *client->getConnection()->getContext<std::pair<std::string,std::string>>();
+    auto&& gateway = *client->getConnection()->getContext<std::string>();
     SPDLOG_INFO(QBOT_TAG "reconnect to {}", gateway);
-    auto newClient = qbot::ConnectToWSServer(gateway, MessageHandler, ClosedHandler);
+    auto newClient = qbot::ConnectToWSServer(gateway, MessageHandler, ClosedHandler, [gateway](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
+        if (r != drogon::ReqResult::Ok)
+        {
+            SPDLOG_ERROR(QBOT_TAG "{} {} {}", gateway, (int)r, resp->body());
+            return;
+        }
+        SPDLOG_INFO(QBOT_TAG "{} is connected!", gateway);
+        client->getConnection()->setContext(std::make_shared<std::string>(gateway));
+    });
     drogon::app().getPlugin<qbot::Instance>()->setWSClient(newClient);
 }
 
 namespace qbot {
     void Instance::initAndStart(const Json::Value& config)
     {
-        LOG_WARN << "init";
+        SPDLOG_WARN(QBOT_TAG "init");
         m_sandbox = config.get("sandbox", false).asBool();
         m_appId = config.get("appId", "").asString();
         m_clientSecret = config.get("clientSecret", "").asString();
@@ -405,13 +413,21 @@ namespace qbot {
                 drogon::app().quit();
                 co_return;
             }
-            m_wsClient = ConnectToWSServer(gateway, MessageHandler, ClosedHandler);
+            m_wsClient = ConnectToWSServer(gateway, MessageHandler, ClosedHandler, [gateway](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
+                if (r != drogon::ReqResult::Ok)
+                {
+                    SPDLOG_ERROR("{} {} {}", gateway, (int)r, resp->body());
+                    return;
+                }
+                SPDLOG_INFO("{} is connected!", gateway);
+                client->getConnection()->setContext(std::make_shared<std::string>(gateway));
+            });
         }));
     }
 
     void Instance::shutdown()
     {
-        LOG_WARN << "down";
+        SPDLOG_WARN(QBOT_TAG "down");
     }
 
     drogon::HttpClientPtr Instance::getApiClient()
@@ -456,9 +472,16 @@ namespace qbot {
         return m_seq;
     }
 
-    const DispatchMap& qbot::Instance::getDispatchMap()
+    const DispatchMap& Instance::getDispatchMap()
     {
         return m_dispatchMap;
+    }
+
+    template<FixedString type>
+    void Instance::registerDispatchAction(DispatchAction&& action)
+    {
+        LOG_INFO << type.data << " " << action;
+        m_dispatchMap[type.data].emplace_back(std::move(action));
     }
 
     drogon::Task<nlohmann::json> Instance::sendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId)
@@ -469,5 +492,19 @@ namespace qbot {
     drogon::Task<nlohmann::json> Instance::sendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId)
     {
         return SendGroupMessageAsync(payload, openId, getAccessToken());
+    }
+
+    void Instance::export_functions()
+    {
+        registerDispatchAction<DispatchType::C2CMessageCreate>({});
+        registerDispatchAction<DispatchType::GroupMessageCreate>({});
+        registerDispatchAction<DispatchType::GroupAtMessageCreate>({});
+        registerDispatchAction<DispatchType::GroupAddRobot>({});
+        registerDispatchAction<DispatchType::GroupDelRobot>({});
+        registerDispatchAction<DispatchType::FriendAdd>({});
+        registerDispatchAction<DispatchType::FriendDel>({});
+        registerDispatchAction<DispatchType::GroupMemberAdd>({});
+        registerDispatchAction<DispatchType::GroupMemberRemove>({});
+        registerDispatchAction<DispatchType::GroupJoinRequest>({});
     }
 }
