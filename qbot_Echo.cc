@@ -1,5 +1,6 @@
 #include "qbot_Echo.h"
 #include "qbot_Instance.h"
+#include <drogon/HttpAppFramework.h>
 
 static nlohmann::json DispatchC2CMessageCreate(const nlohmann::json& data)
 {

@@ -2,6 +2,8 @@
 #include "onebot_Instance.h"
 #include "qbot_Instance.h"
 #include <xxhash.h>
+#include <drogon/HttpAppFramework.h>
+#include <regex>
 
 constexpr XXH64_hash_t OPID_HASH_SEED = 'opid';
 constexpr XXH32_hash_t MGID_HASH_SEED = 'mgid';
@@ -140,7 +142,7 @@ static nlohmann::json parseMessage(const nlohmann::json& data)
             std::pair{"video", "video"},
             std::pair{"voice", "record"},
             std::pair{"file", "file"}
-            });
+        });
         ret.insert(ret.end(), attachmentsArray.begin(), attachmentsArray.end());
     }
     auto contentArray = parseContent(data["d"]["content"]);

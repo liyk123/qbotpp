@@ -1,13 +1,13 @@
 #pragma once
 #include <drogon/WebSocketClient.h>
-#include <drogon/drogon.h>
+#include <drogon/HttpTypes.h>
 #include <nlohmann/json.hpp>
+#include <variant>
 
-namespace qbot {
+namespace tools {
     using WSMessageHandler = std::function<void(std::string&&, const drogon::WebSocketClientPtr&, const drogon::WebSocketMessageType&)>;
     using WSClosedHandler = std::function<void(const drogon::WebSocketClientPtr&)>;
-    using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
-    using MessageCache = drogon::CacheMap<std::uint32_t, std::string>;
+    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const drogon::WebSocketRequestCallback& requestCallback, const std::span<std::pair<std::string, std::string>>& headers = {});
 
     template<size_t N>
     struct FixedString
@@ -24,44 +24,6 @@ namespace qbot {
         constexpr size_t length() const { return N - 1; }
     };
 
-    typedef nlohmann::json(*DispatchAction)(const nlohmann::json& data);
-
-    struct DispatchType
-    {
-        // 登录成功
-        static constexpr FixedString Ready = "READY";
-        // 重连成功
-        static constexpr FixedString Resumed = "RESUMED";
-        // 用户单聊发消息给机器人
-        static constexpr FixedString C2CMessageCreate = "C2C_MESSAGE_CREATE";
-        // 用户添加使用机器人
-        static constexpr FixedString FriendAdd = "FRIEND_ADD";
-        // 用户删除机器人
-        static constexpr FixedString FriendDel = "FRIEND_DEL";
-        // 用户在机器人资料卡手动关闭"主动消息"推送
-        static constexpr FixedString C2CMsgReject = "C2C_MSG_REJECT";
-        // 用户在机器人资料卡手动开启"主动消息"推送开关
-        static constexpr FixedString C2CMsgReceived = "C2C_MSG_RECEIVE";
-        // 用户在群里@机器人时收到的消息
-        static constexpr FixedString GroupAtMessageCreate = "GROUP_AT_MESSAGE_CREATE";
-        // 机器人被添加到群聊
-        static constexpr FixedString GroupAddRobot = "GROUP_ADD_ROBOT";
-        // 机器人被移出群聊
-        static constexpr FixedString GroupDelRobot = "GROUP_DEL_ROBOT";
-        // 群管理员主动在机器人资料页操作关闭通知
-        static constexpr FixedString GroupMsgReject = "GROUP_MSG_REJECT";
-        // 群管理员主动在机器人资料页操作开启通知
-        static constexpr FixedString GroupMsgReceive = "GROUP_MSG_RECEIVE";
-        // 机器人收到了群聊消息
-        static constexpr FixedString GroupMessageCreate = "GROUP_MESSAGE_CREATE";
-        // 群用户添加
-        static constexpr FixedString GroupMemberAdd = "GROUP_MEMBER_ADD";
-        // 群用户移除
-        static constexpr FixedString GroupMemberRemove = "GROUP_MEMBER_REMOVE";
-        // 用户申请加群
-        static constexpr FixedString GroupJoinRequest = "GROUP_JOIN_REQUEST";
-    };
-
     template <drogon::HttpMethod method>
     using HttpMethodType = std::integral_constant<drogon::HttpMethod, method>;
 
@@ -74,19 +36,57 @@ namespace qbot {
     >;
 
     using JsonMethod = std::pair<nlohmann::json, HttpMethodVariant>;
+}
 
-    drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const drogon::WebSocketRequestCallback& requestCallback, const std::span<std::pair<std::string, std::string>>& headers = {});
+namespace qbot {
+    typedef nlohmann::json(*DispatchAction)(const nlohmann::json& data);
+
+    struct DispatchType
+    {
+        // 登录成功
+        static constexpr tools::FixedString Ready = "READY";
+        // 重连成功
+        static constexpr tools::FixedString Resumed = "RESUMED";
+        // 用户单聊发消息给机器人
+        static constexpr tools::FixedString C2CMessageCreate = "C2C_MESSAGE_CREATE";
+        // 用户添加使用机器人
+        static constexpr tools::FixedString FriendAdd = "FRIEND_ADD";
+        // 用户删除机器人
+        static constexpr tools::FixedString FriendDel = "FRIEND_DEL";
+        // 用户在机器人资料卡手动关闭"主动消息"推送
+        static constexpr tools::FixedString C2CMsgReject = "C2C_MSG_REJECT";
+        // 用户在机器人资料卡手动开启"主动消息"推送开关
+        static constexpr tools::FixedString C2CMsgReceived = "C2C_MSG_RECEIVE";
+        // 用户在群里@机器人时收到的消息
+        static constexpr tools::FixedString GroupAtMessageCreate = "GROUP_AT_MESSAGE_CREATE";
+        // 机器人被添加到群聊
+        static constexpr tools::FixedString GroupAddRobot = "GROUP_ADD_ROBOT";
+        // 机器人被移出群聊
+        static constexpr tools::FixedString GroupDelRobot = "GROUP_DEL_ROBOT";
+        // 群管理员主动在机器人资料页操作关闭通知
+        static constexpr tools::FixedString GroupMsgReject = "GROUP_MSG_REJECT";
+        // 群管理员主动在机器人资料页操作开启通知
+        static constexpr tools::FixedString GroupMsgReceive = "GROUP_MSG_RECEIVE";
+        // 机器人收到了群聊消息
+        static constexpr tools::FixedString GroupMessageCreate = "GROUP_MESSAGE_CREATE";
+        // 群用户添加
+        static constexpr tools::FixedString GroupMemberAdd = "GROUP_MEMBER_ADD";
+        // 群用户移除
+        static constexpr tools::FixedString GroupMemberRemove = "GROUP_MEMBER_REMOVE";
+        // 用户申请加群
+        static constexpr tools::FixedString GroupJoinRequest = "GROUP_JOIN_REQUEST";
+    };
 }
 
 namespace drogon {
     template<>
-    HttpRequestPtr toRequest(qbot::JsonMethod&& obj);
+    HttpRequestPtr toRequest(tools::JsonMethod&& obj);
 
     template<>
-    HttpRequestPtr toRequest(const qbot::JsonMethod& obj);
+    HttpRequestPtr toRequest(const tools::JsonMethod& obj);
 
     template<>
-    HttpRequestPtr toRequest(qbot::JsonMethod& obj);
+    HttpRequestPtr toRequest(tools::JsonMethod& obj);
 
     template<>
     HttpRequestPtr toRequest(nlohmann::json&& obj);

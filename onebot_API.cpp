@@ -15,7 +15,7 @@ namespace onebot {
     namespace API {
         Result sendPrivateMsg(uint64_t user_id, const std::string& message, bool auto_escape)
         {
-            return getQBotInstance()->sendC2CMessageAsync({},{});
+            return getQBotInstance()->sendC2CMessageAsync({}, {});
         }
 
         Result sendGroupMsg(uint64_t group_id, const std::string& message, bool auto_escape)

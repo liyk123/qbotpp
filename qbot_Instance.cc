@@ -7,8 +7,8 @@
 
 using namespace std::literals;
 using qbot::DispatchType;
-using qbot::JsonMethod;
-using qbot::HttpMethodType;
+using tools::JsonMethod;
+using tools::HttpMethodType;
 
 constexpr auto QBotUniversalUrl = "https://api.bot.qq.com";
 constexpr auto QBotSandboxUrl = "https://sandbox.api.sgroup.qq.com";
@@ -384,7 +384,7 @@ static void ClosedHandler(const drogon::WebSocketClientPtr& client)
 {
     auto&& gateway = *client->getConnection()->getContext<std::string>();
     SPDLOG_INFO(QBOT_TAG "reconnect to {}", gateway);
-    auto newClient = qbot::ConnectToWSServer(gateway, MessageHandler, ClosedHandler, [gateway](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
+    auto newClient = tools::ConnectToWSServer(gateway, MessageHandler, ClosedHandler, [gateway](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
         if (r != drogon::ReqResult::Ok)
         {
             SPDLOG_ERROR(QBOT_TAG "{} {} {}", gateway, (int)r, resp->body());
@@ -413,7 +413,7 @@ namespace qbot {
                 drogon::app().quit();
                 co_return;
             }
-            m_wsClient = ConnectToWSServer(gateway, MessageHandler, ClosedHandler, [gateway](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
+            m_wsClient = tools::ConnectToWSServer(gateway, MessageHandler, ClosedHandler, [gateway](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
                 if (r != drogon::ReqResult::Ok)
                 {
                     SPDLOG_ERROR("{} {} {}", gateway, (int)r, resp->body());

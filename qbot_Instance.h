@@ -7,6 +7,7 @@
 
 namespace qbot {
 
+    using tools::FixedString;
     using DispatchMap = std::unordered_map<std::string_view, std::vector<DispatchAction>>;
 
     class Instance : public drogon::Plugin<Instance>

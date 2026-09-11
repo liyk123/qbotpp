@@ -2,6 +2,7 @@
 #include "qbot_Instance.h"
 #include <spdlog/spdlog.h>
 #include <xxhash.h>
+#include <drogon/HttpAppFramework.h>
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
@@ -106,7 +107,7 @@ static void ClosedHandler(const drogon::WebSocketClientPtr& client)
         {
             headers.emplace_back("Authorization", "Bearer " + token);
         }
-        pClient = qbot::ConnectToWSServer(url, MessageHandler, ClosedHandler, [url, token](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
+        pClient = tools::ConnectToWSServer(url, MessageHandler, ClosedHandler, [url, token](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
             RequestCallback(url, token, r, resp, client);
         }, headers);
     });
@@ -127,7 +128,7 @@ namespace onebot {
             {
                 headers.emplace_back("Authorization", "Bearer " + token);
             }
-            qbot::ConnectToWSServer(url, MessageHandler, ClosedHandler, [url, token](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
+            tools::ConnectToWSServer(url, MessageHandler, ClosedHandler, [url, token](drogon::ReqResult r, const drogon::HttpResponsePtr& resp, const drogon::WebSocketClientPtr& client) {
                 RequestCallback(url, token, r, resp, client);
                 if (r == drogon::ReqResult::Ok)
                 {
@@ -156,6 +157,10 @@ namespace onebot {
     void Instance::initAndStart(const Json::Value& config)
     {
         SPDLOG_WARN(ONEBOT_TAG "init");
+        m_clientCache = std::make_unique<ClientCache>(drogon::app().getLoop());
+        m_eventIdCache = std::make_unique<IdCache>(drogon::app().getLoop());
+        m_messageIdCache = std::make_unique<IdCache>(drogon::app().getLoop());
+        m_idMessageIdMap = std::make_unique<IdMessageIdMap>(drogon::app().getLoop());
         InitAndConnect(config);
         RegisterDispatchActions();
     }
@@ -165,9 +170,9 @@ namespace onebot {
         SPDLOG_WARN(ONEBOT_TAG "down");
     }
 
-    qbot::ClientCache& Instance::clientCache()
+    ClientCache& Instance::clientCache()
     {
-        return m_clientCache;
+        return *m_clientCache;
     }
 
     std::vector<std::string>& Instance::urlArray()
@@ -179,12 +184,42 @@ namespace onebot {
     {
         for (auto&& url : m_urlArray)
         {
-            auto client = m_clientCache[url];
+            auto client = (*m_clientCache)[url];
             client->getLoop()->runInLoop([client, data] {
                 if (auto connection = client->getConnection(); connection != nullptr && connection->connected())
                 {
                     Send(connection, *data);
                 }
+            });
+        }
+    }
+
+    void Instance::cacheEventId(std::uint64_t sceneId, std::uint32_t eventId, std::string_view eventIdStr)
+    {
+        if (m_idMessageIdMap->find(sceneId))
+        {
+            m_idMessageIdMap->modify(sceneId, [sceneId, eventId, this, idStr = std::string(eventIdStr)](std::deque<std::uint32_t>& val) {
+                val.push_back(eventId);
+                m_eventIdCache->insert(eventId, idStr, 5, [sceneId, this] {
+                    m_idMessageIdMap->modify(sceneId, [](std::deque<std::uint32_t>& val) {
+                        val.pop_front();
+                    });
+                });
+            });
+        }
+    }
+
+    void Instance::cacheMessageId(std::uint64_t sceneId, std::uint32_t messageId, std::string_view messageIdStr)
+    {
+        if (m_idMessageIdMap->find(sceneId))
+        {
+            m_idMessageIdMap->modify(sceneId, [sceneId, messageId, this, idStr = std::string(messageIdStr)](std::deque<std::uint32_t>& val) {
+                val.push_back(messageId);
+                m_messageIdCache->insert(messageId, idStr, 5, [sceneId, this] {
+                    m_idMessageIdMap->modify(sceneId, [](std::deque<std::uint32_t>& val) {
+                        val.pop_front();
+                    });
+                });
             });
         }
     }

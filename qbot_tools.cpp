@@ -3,7 +3,7 @@
 
 using namespace std::literals;
 
-namespace qbot {
+namespace tools {
     drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const drogon::WebSocketRequestCallback& requestCallback, const std::span<std::pair<std::string, std::string>>& headers)
     {
         auto pos = url.find("/", url.starts_with("ws://"sv) ? "ws://"sv.length() : "wss://"sv.length());
@@ -23,7 +23,7 @@ namespace qbot {
     }
 }
 
-template<typename T> requires std::same_as<std::decay_t<T>, qbot::JsonMethod>
+template<typename T> requires std::same_as<std::decay_t<T>, tools::JsonMethod>
 drogon::HttpRequestPtr toRequestPtr(T&& obj)
 {
     auto&& [data, method] = obj;
@@ -58,19 +58,19 @@ drogon::HttpRequestPtr toRequestPtr(T&& obj)
 
 namespace drogon {
     template<>
-    HttpRequestPtr toRequest(qbot::JsonMethod&& obj)
+    HttpRequestPtr toRequest(tools::JsonMethod&& obj)
     {
         return toRequestPtr(obj);
     }
 
     template<>
-    HttpRequestPtr toRequest(const qbot::JsonMethod& obj)
+    HttpRequestPtr toRequest(const tools::JsonMethod& obj)
     {
         return toRequestPtr(obj);
     }
 
     template<>
-    HttpRequestPtr toRequest(qbot::JsonMethod& obj)
+    HttpRequestPtr toRequest(tools::JsonMethod& obj)
     {
         return toRequestPtr(obj);
     }
