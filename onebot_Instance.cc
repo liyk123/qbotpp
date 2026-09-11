@@ -1,16 +1,15 @@
 #include "onebot_Instance.h"
 #include "qbot_Instance.h"
+#include "onebot_Event.h"
 #include <spdlog/spdlog.h>
-#include <xxhash.h>
 #include <drogon/HttpAppFramework.h>
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
 using qbot::DispatchType;
 using OnebotContext = std::tuple<std::string, std::string, trantor::TimerId>;
-
-constexpr XXH64_hash_t OPID_HASH_SEED = 'opid';
-constexpr XXH32_hash_t MGID_HASH_SEED = 'mgid';
+using IdCache = drogon::CacheMap<std::uint32_t, std::pair<std::string, std::uint32_t>>;
+using IdDequeCache = drogon::CacheMap<std::uint64_t, std::deque<std::uint32_t>>;
 
 onebot::Instance* getInstance()
 {
@@ -112,7 +111,20 @@ static void ClosedHandler(const drogon::WebSocketClientPtr& client)
         }, headers);
     });
 }
+
 namespace onebot {
+
+    struct Instance::Impl
+    {
+        Impl() = default;
+        ~Impl() = default;
+        ClientCache clientCache{ drogon::app().getLoop() };
+        IdCache eventIdCache{ drogon::app().getLoop() };
+        IdCache messageIdCache{ drogon::app().getLoop() };
+        IdDequeCache idDequeCache{ drogon::app().getLoop() };
+        std::vector<std::string> urlArray{};
+    };
+
     static void InitAndConnect(const Json::Value& config)
     {
         for (auto&& val : config["ws_reverse"])
@@ -135,7 +147,7 @@ namespace onebot {
                     getInstance()->clientCache().insert(url, client);
                 }
             }, headers);
-            getInstance()->urlArray().emplace_back(url);
+            getInstance()->insertUrl(url);
         }
     }
 
@@ -157,10 +169,7 @@ namespace onebot {
     void Instance::initAndStart(const Json::Value& config)
     {
         SPDLOG_WARN(ONEBOT_TAG "init");
-        m_clientCache = std::make_unique<ClientCache>(drogon::app().getLoop());
-        m_eventIdCache = std::make_unique<IdCache>(drogon::app().getLoop());
-        m_messageIdCache = std::make_unique<IdCache>(drogon::app().getLoop());
-        m_idMessageIdMap = std::make_unique<IdMessageIdMap>(drogon::app().getLoop());
+        m_impl = std::make_shared<Impl>();
         InitAndConnect(config);
         RegisterDispatchActions();
     }
@@ -172,55 +181,58 @@ namespace onebot {
 
     ClientCache& Instance::clientCache()
     {
-        return *m_clientCache;
+        return m_impl->clientCache;
     }
 
-    std::vector<std::string>& Instance::urlArray()
+    void Instance::insertUrl(std::string_view urlView)
     {
-        return m_urlArray;
+        m_impl->urlArray.emplace_back(urlView);
     }
 
-    void Instance::dispatch(std::shared_ptr<onebot::Event::Variant> data)
+    void Instance::dispatch(const std::shared_ptr<void>& eventVariant)
     {
-        for (auto&& url : m_urlArray)
+        auto pVariant = std::static_pointer_cast<Event::Variant>(eventVariant);
+        for (auto&& url : m_impl->urlArray)
         {
-            auto client = (*m_clientCache)[url];
-            client->getLoop()->runInLoop([client, data] {
+            auto client = (m_impl->clientCache)[url];
+            client->getLoop()->runInLoop([client, pVariant] {
                 if (auto connection = client->getConnection(); connection != nullptr && connection->connected())
                 {
-                    Send(connection, *data);
+                    Send(connection, *pVariant);
                 }
             });
         }
     }
 
-    void Instance::cacheEventId(std::uint64_t sceneId, std::uint32_t eventId, std::string_view eventIdStr)
+    void Instance::cacheEventId(std::uint64_t sceneId, std::uint32_t eventId, std::string_view eventIdStr, qbot::SceneConstants constants)
     {
-        if (m_idMessageIdMap->find(sceneId))
+        if (!m_impl->idDequeCache.find(sceneId))
         {
-            m_idMessageIdMap->modify(sceneId, [sceneId, eventId, this, idStr = std::string(eventIdStr)](std::deque<std::uint32_t>& val) {
-                val.push_back(eventId);
-                m_eventIdCache->insert(eventId, idStr, 5, [sceneId, this] {
-                    m_idMessageIdMap->modify(sceneId, [](std::deque<std::uint32_t>& val) {
-                        val.pop_front();
-                    });
+            m_impl->idDequeCache.insert(sceneId, {});
+        }
+        m_impl->idDequeCache.modify(sceneId, [sceneId, eventId, this, idStr = std::string(eventIdStr), constants](std::deque<std::uint32_t>& val) {
+            val.push_back(eventId);
+            m_impl->eventIdCache.insert(eventId, { idStr, constants.times }, constants.timeout, [sceneId, this] {
+                m_impl->idDequeCache.modify(sceneId, [](std::deque<std::uint32_t>& val) {
+                    val.pop_front();
                 });
             });
-        }
+        });
     }
 
-    void Instance::cacheMessageId(std::uint64_t sceneId, std::uint32_t messageId, std::string_view messageIdStr)
+    void Instance::cacheMessageId(std::uint64_t sceneId, std::uint32_t messageId, std::string_view messageIdStr, qbot::SceneConstants constants)
     {
-        if (m_idMessageIdMap->find(sceneId))
+        if (!m_impl->idDequeCache.find(sceneId))
         {
-            m_idMessageIdMap->modify(sceneId, [sceneId, messageId, this, idStr = std::string(messageIdStr)](std::deque<std::uint32_t>& val) {
-                val.push_back(messageId);
-                m_messageIdCache->insert(messageId, idStr, 5, [sceneId, this] {
-                    m_idMessageIdMap->modify(sceneId, [](std::deque<std::uint32_t>& val) {
-                        val.pop_front();
-                    });
+            m_impl->idDequeCache.insert(sceneId, {});
+        }
+        m_impl->idDequeCache.modify(sceneId, [sceneId, messageId, this, idStr = std::string(messageIdStr), constants](std::deque<std::uint32_t>& val) {
+            val.push_back(messageId);
+            m_impl->messageIdCache.insert(messageId, { idStr, constants.times }, constants.timeout, [sceneId, this] {
+                m_impl->idDequeCache.modify(sceneId, [](std::deque<std::uint32_t>& val) {
+                    val.pop_front();
                 });
             });
-        }
+        });
     }
 }

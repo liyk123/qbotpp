@@ -76,6 +76,15 @@ namespace qbot {
         // 用户申请加群
         static constexpr tools::FixedString GroupJoinRequest = "GROUP_JOIN_REQUEST";
     };
+
+    struct SceneConstants
+    {
+        std::uint32_t timeout;
+        std::uint32_t times;
+    };
+
+    constexpr auto GroupConstants = SceneConstants{ 5 * 60,5 };
+    constexpr auto C2CConstants = SceneConstants{ 60 * 60,4 };
 }
 
 namespace drogon {

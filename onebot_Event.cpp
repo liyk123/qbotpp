@@ -7,6 +7,7 @@
 
 constexpr XXH64_hash_t OPID_HASH_SEED = 'opid';
 constexpr XXH32_hash_t MGID_HASH_SEED = 'mgid';
+constexpr XXH32_hash_t EVID_HASH_SEED = 'evid';
 
 static onebot::Instance* getInstance()
 {
@@ -190,6 +191,7 @@ namespace onebot {
                     .message_openid{msgId}
                 }
             };
+            getInstance()->cacheMessageId(msg.user_id, msg.message_id, msgId, qbot::C2CConstants);
             getInstance()->dispatch(std::make_shared<Variant>(std::move(msg)));
             return {};
         }
@@ -224,7 +226,11 @@ namespace onebot {
                     .self_id = std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId()),
                     .group_id = ::XXH64(groupId.data(), groupId.size(), OPID_HASH_SEED),
                     .user_id = ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED),
-                    .file = *file
+                    .file = *file,
+                    .open_qq_ext{
+                        .group_openid{groupId},
+                        .user_openid{userId}
+                    }
                 };
                 getInstance()->dispatch(std::make_shared<Variant>(std::move(notice)));
                 return {};
@@ -249,6 +255,7 @@ namespace onebot {
                     .message_openid{msgId}
                 }
             };
+            getInstance()->cacheMessageId(msg.group_id, msg.message_id, msgId, qbot::GroupConstants);
             getInstance()->dispatch(std::make_shared<Variant>(std::move(msg)));
             return {};
         }
@@ -270,6 +277,9 @@ namespace onebot {
                     .user_openid{userId}
                 }
             };
+            auto eventId = data["id"].get<std::string_view>();
+            auto evXXH32 = ::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED);
+            getInstance()->cacheEventId(notice.user_id, evXXH32, eventId, qbot::GroupConstants);
             getInstance()->dispatch(std::make_shared<Variant>(std::move(notice)));
             return {};
         }
@@ -297,8 +307,8 @@ namespace onebot {
             return {};
         }
 
-        template<typename T> requires (std::is_same_v<T, FriendAddNotice> || std::is_same_v<T, FriendDelNotice>)
-            nlohmann::json onFriendNoticeReceived(const nlohmann::json& data)
+        template<typename T> requires std::same_as<T, FriendAddNotice> || std::same_as<T, FriendDelNotice>
+        nlohmann::json onFriendNoticeReceived(const nlohmann::json& data)
         {
             auto userId = data["d"]["openid"].get<std::string_view>();
             auto notice = T{
@@ -309,6 +319,12 @@ namespace onebot {
                     .user_openid{userId}
                 }
             };
+            if constexpr (std::same_as<T, FriendAddNotice>)
+            {
+                auto eventId = data["id"].get<std::string_view>();
+                auto evXXH32 = ::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED);
+                getInstance()->cacheEventId(notice.user_id, evXXH32, eventId, qbot::C2CConstants);
+            }
             getInstance()->dispatch(std::make_shared<Variant>(std::move(notice)));
             return {};
         }
