@@ -186,12 +186,11 @@ namespace onebot {
                 .message_id = ::XXH32(msgId.data(), msgId.size(), MGID_HASH_SEED),
                 .message = msgArray,
                 .raw_message = toRaw(msgArray),
-                .open_qq_ext = {
+                .inter_ext = {
                     .user_openid{userId},
                     .message_openid{msgId}
                 }
             };
-            getInstance()->cacheMessageId(msg.user_id, msg.message_id, msgId, qbot::C2CConstants);
             getInstance()->dispatch(std::make_shared<Variant>(std::move(msg)));
             return {};
         }
@@ -227,7 +226,7 @@ namespace onebot {
                     .group_id = ::XXH64(groupId.data(), groupId.size(), OPID_HASH_SEED),
                     .user_id = ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED),
                     .file = *file,
-                    .open_qq_ext{
+                    .inter_ext{
                         .group_openid{groupId},
                         .user_openid{userId}
                     }
@@ -249,13 +248,12 @@ namespace onebot {
                     .nickname{data["d"]["author"]["username"]},
                     .role{data["d"]["author"]["member_role"]}
                 },
-                .open_qq_ext = {
+                .inter_ext = {
                     .user_openid{userId},
                     .group_openid{groupId},
                     .message_openid{msgId}
                 }
             };
-            getInstance()->cacheMessageId(msg.group_id, msg.message_id, msgId, qbot::GroupConstants);
             getInstance()->dispatch(std::make_shared<Variant>(std::move(msg)));
             return {};
         }
@@ -264,6 +262,7 @@ namespace onebot {
         {
             auto groupId = data["d"]["group_openid"].get<std::string_view>();
             auto userId = data["d"]["member_openid"].get<std::string_view>();
+            auto eventId = data["id"].get<std::string_view>();
             auto selfId = std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId());
             auto notice = GroupIncreaseNotice{
                 .time = data["d"]["timestamp"],
@@ -272,14 +271,13 @@ namespace onebot {
                 .user_id = ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED),
                 .operator_id = selfId,
                 .sub_type = GroupIncreaseNotice::SubType::APPROVE,
-                .open_qq_ext = {
+                .inter_ext = {
                     .group_openid{groupId},
-                    .user_openid{userId}
+                    .user_openid{userId},
+                    .event_id{::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED)},
+                    .event_openid{eventId}
                 }
             };
-            auto eventId = data["id"].get<std::string_view>();
-            auto evXXH32 = ::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED);
-            getInstance()->cacheEventId(notice.user_id, evXXH32, eventId, qbot::GroupConstants);
             getInstance()->dispatch(std::make_shared<Variant>(std::move(notice)));
             return {};
         }
@@ -298,7 +296,7 @@ namespace onebot {
                 .user_id = isKickMe ? selfId : ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED),
                 .operator_id = isKickMe ? ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED) : selfId,
                 .sub_type = type,
-                .open_qq_ext = {
+                .inter_ext = {
                     .group_openid{groupId},
                     .user_openid{userId}
                 }
@@ -315,7 +313,7 @@ namespace onebot {
                 .time = data["d"]["timestamp"],
                 .self_id = std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId()),
                 .user_id = ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED),
-                .open_qq_ext = {
+                .inter_ext = {
                     .user_openid{userId}
                 }
             };
@@ -323,7 +321,8 @@ namespace onebot {
             {
                 auto eventId = data["id"].get<std::string_view>();
                 auto evXXH32 = ::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED);
-                getInstance()->cacheEventId(notice.user_id, evXXH32, eventId, qbot::C2CConstants);
+                notice.inter_ext.event_id = evXXH32;
+                notice.inter_ext.event_openid = eventId;
             }
             getInstance()->dispatch(std::make_shared<Variant>(std::move(notice)));
             return {};
@@ -350,7 +349,7 @@ namespace onebot {
                 .user_id = ::XXH64(userId.data(), userId.size(), OPID_HASH_SEED),
                 .comment{isAdd ? data["d"]["verify_info"].value("verify_message", std::string{}) : std::string{}},
                 .flag{isAdd ? data["d"]["join_request_id"].get<std::string>() : std::string{}},
-                .open_qq_ext{
+                .inter_ext{
                     .group_openid{groupId},
                     .user_openid{userId}
                 }
