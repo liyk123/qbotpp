@@ -33,6 +33,7 @@ set(FILE_LIST
 find_package(Drogon CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
+find_package(fixed_string CONFIG REQUIRED)
 
 
 macro(get_git_hash _git_hash)
@@ -87,6 +88,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG -DSPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 endif()
 
+if(WIN32)
+    add_compile_definitions(NOMINMAX)
+endif()
+
 add_definitions(-DPROJECT_NAME="${PROJECT_NAME}")
 
 add_executable(${PROJECT_NAME} ${FILE_LIST})
@@ -95,6 +100,7 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE Drogon::Drogon
     PRIVATE nlohmann_json::nlohmann_json
     PRIVATE xxHash::xxhash
+    PRIVATE fixed_string::fixed_string
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)

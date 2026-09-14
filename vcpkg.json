@@ -13,6 +13,7 @@
     {
       "name": "trantor",
       "features": [ "spdlog" ]
-    }
+    },
+    "fixed-string"
   ]
 }

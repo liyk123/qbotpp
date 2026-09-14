@@ -1,8 +1,9 @@
 #include "onebot_Instance.h"
 #include "qbot_Instance.h"
+#include "qbot_tools.h"
 #include "onebot_Event.h"
-#include <spdlog/spdlog.h>
 #include <drogon/drogon.h>
+#include <spdlog/spdlog.h>
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
