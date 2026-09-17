@@ -8,14 +8,16 @@
 #define QBOT_TAG "\033[36mQBot\033[0m "
 
 using namespace std::literals;
-using qbot::DispatchType;
+namespace DispatchType = qbot::DispatchType;
 using tools::JsonMethod;
 using tools::HttpMethodType;
 using DispatchMap = std::unordered_map<std::string_view, std::vector<qbot::DispatchAction>>;
 
 constexpr auto QBotUniversalUrl = "https://api.bot.qq.com";
 constexpr auto QBotSandboxUrl = "https://sandbox.api.sgroup.qq.com";
-constexpr auto GROUP_AND_C2C_EVENT = 1U << 25 | 1U << 24;
+constexpr auto GROUP_AND_C2C_EVENT = 1U << 25;
+constexpr auto GROUP_MEMBER_EVENT = 1U << 24;
+constexpr auto INTERACTION = 1U << 26;
 
 enum class opcode : std::int32_t
 {
@@ -67,7 +69,8 @@ struct qbot::Instance::Impl
         {DispatchType::GroupMemberRemove,{}},
         {DispatchType::GroupMessageCreate,{}},
         {DispatchType::GroupMsgReceive,{}},
-        {DispatchType::GroupMsgReject,{}}
+        {DispatchType::GroupMsgReject,{}},
+        {DispatchType::InteractionCreate,{}},
     };
     std::string getAccessToken();
     void setAccessToken(const std::string token);
@@ -329,7 +332,7 @@ static void SendIdentify(const drogon::WebSocketConnectionPtr& connection)
         {"op", opcode::Identify},
         {"d", {
             {"token","QQBot " + getInstanceImpl()->getAccessToken()},
-            {"intents", GROUP_AND_C2C_EVENT}
+            {"intents",GROUP_AND_C2C_EVENT | GROUP_MEMBER_EVENT | INTERACTION}
         }},
         {"shard", nullptr},
         {"properties", nullptr}

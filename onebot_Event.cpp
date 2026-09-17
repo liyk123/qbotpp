@@ -126,7 +126,7 @@ static nlohmann::json parseAttachments(const nlohmann::json& attachments, std::i
                     {"type", cqType},
                     {"data", {{"file", it["url"]}}},
                     {"ext", {{"size", it["size"]}}, {"name", it["filename"]}}
-                    });
+                });
             }
         }
     }

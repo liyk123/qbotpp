@@ -7,7 +7,7 @@
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
-using QDT = qbot::DispatchType;
+namespace QDT = qbot::DispatchType;
 using OnebotContext = std::tuple<std::string, std::string, trantor::TimerId>;
 using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
 using IdCache = drogon::CacheMap<std::uint32_t, std::pair<std::string, std::uint32_t>>;
