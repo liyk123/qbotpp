@@ -519,6 +519,46 @@ namespace qbot {
         return SendGroupMessageAsync(payload, openId, m_pImpl->getAccessToken());
     }
 
+    drogon::Task<nlohmann::json> Instance::uploadC2CBufferFileAsync(const std::string& buf, const std::string& name, const FileType type, const std::string& openId)
+    {
+        auto prePayload = nlohmann::json{
+            {"file_type", type},
+            {"file_size", buf.size()},
+            {"file_name", name},
+            {"md5", drogon::utils::getMd5(buf)},
+            {"sha1", drogon::utils::getSha1(buf)},
+            {"md5_10m", drogon::utils::getMd5(buf.substr(0,FILE_POS_MD5_10M))}
+        };
+        auto preData = co_await UploadC2CPartPrepareAysnc(prePayload, openId, m_pImpl->getAccessToken());
+        std::vector<drogon::Task<void>> tasks;
+        std::size_t partPos = 0;
+        for (auto&& part : preData["parts"])
+        {
+            auto blockSize = part["block_size"].get<std::size_t>();
+            auto task = [](const std::string& bufPart,const nlohmann::json& part) -> drogon::Task<> {
+                auto url = part["presigned_url"].get<std::string>();
+                auto pos = url.find("/", url.starts_with("http://"sv) ? "http://"sv.length() : "https://"sv.length());
+                auto host = url.substr(0, pos);
+                auto path = url.substr(pos);
+                auto client = drogon::HttpClient::newHttpClient(host);
+                auto req = drogon::HttpRequest::newCustomHttpRequest(JsonMethod{ bufPart,HttpMethodType<drogon::Put>{} });
+            };
+            tasks.push_back(task(buf.substr(partPos, blockSize), part));
+            partPos += blockSize;
+        }
+        co_await drogon::when_all(tasks);
+        co_return{};
+    }
+
+    drogon::Task<nlohmann::json> Instance::uploadC2CUrlFileAsync(const std::string& url, const FileType type, const std::string& openId) const
+    {
+        auto payload = nlohmann::json{
+            {"file_type", type},
+            {"url", url},
+        };
+        return UploadC2CFileAsync(payload, openId, m_pImpl->getAccessToken());
+    }
+
     void Instance::export_functions()
     {
         registerDispatchAction<DispatchType::C2CMessageCreate>({});

@@ -24,6 +24,7 @@ set(FILE_LIST
     "qbot_Instance.cc"
     "qbot_tools.h"
     "qbot_tools.cpp"
+    "qbot_types.h"
     "qbot_Echo.h"
     "qbot_Echo.cc"
     "onebot_Instance.h"

@@ -1,5 +1,8 @@
 #include "onebot_API.h"
 #include "qbot_Instance.h"
+#include <fstream>
+
+using namespace std::literals;
 
 static nlohmann::json ref_message(nlohmann::json data)
 {
@@ -11,11 +14,189 @@ static qbot::Instance* getQBotInstance()
     return drogon::app().getPlugin<qbot::Instance>();
 }
 
+// 解码 CQ 码中的转义字符
+static std::string unescape_cq(std::string_view str)
+{
+    std::string res;
+    res.reserve(str.size());
+    for (size_t i = 0; i < str.size(); ++i)
+    {
+        if (str[i] == '&' && i + 4 < str.size() && str.substr(i, 5) == "&#44;")
+        {
+            res += ',';
+            i += 4;
+        }
+        else if (str[i] == '&' && i + 4 < str.size() && str.substr(i, 5) == "&amp;")
+        {
+            res += '&';
+            i += 4;
+        }
+        else if (str[i] == '[' && i + 4 < str.size() && str.substr(i, 5) == "&#91;")
+        {
+            res += '[';
+            i += 4;
+        }
+        else if (str[i] == ']' && i + 4 < str.size() && str.substr(i, 5) == "&#93;")
+        {
+            res += ']';
+            i += 4;
+        }
+        else
+        {
+            res += str[i];
+        }
+    }
+    return res;
+}
+
+// 解析混合消息为 nlohmann::json 数组
+static nlohmann::json parse_cqcode(std::string_view message)
+{
+    auto result = nlohmann::json::array();
+
+    // 匹配 [CQ:type,key=value,key=value] 的正则表达式
+    // C++20 的 std::regex 暂不支持 std::string_view 直接匹配，这里转为 std::match_results 内部迭代
+    std::regex cq_regex(R"(\[CQ:([a-zA-Z0-9_\-]+)((?:,[a-zA-Z0-9_\-]+=[^,\]]*)*)\])");
+    std::regex param_regex(R"(([a-zA-Z0-9_\-]+)=([^,\]]*))");
+
+    auto s_begin = message.begin();
+    auto s_end = message.end();
+
+    std::cmatch match;
+    size_t last_pos = 0;
+
+    // 循环匹配所有 CQ 码
+    while (std::regex_search(message.data() + last_pos, message.data() + message.size(), match, cq_regex))
+    {
+        size_t match_pos = last_pos + match.position();
+
+        // 1. 处理 CQ 码之前的纯文本段
+        if (match_pos > last_pos)
+        {
+            std::string_view text_segment = message.substr(last_pos, match_pos - last_pos);
+            if (!text_segment.empty())
+            {
+                result.push_back({
+                    {"type", "text"},
+                    {"data", {{"text", unescape_cq(text_segment)}}}
+                    });
+            }
+        }
+
+        // 2. 处理提取到的 CQ 码
+        std::string cq_type = match[1].str();
+        std::string params_str = match[2].str();
+        auto data_obj = nlohmann::json::object();
+
+        // 解析 CQ 码内部的参数对
+        auto params_begin = std::sregex_iterator(params_str.begin(), params_str.end(), param_regex);
+        auto params_end = std::sregex_iterator();
+
+        for (std::sregex_iterator i = params_begin; i != params_end; ++i)
+        {
+            std::smatch param_match = *i;
+            std::string key = param_match[1].str();
+            std::string value = param_match[2].str();
+            data_obj[key] = unescape_cq(value);
+        }
+
+        result.push_back({
+            {"type", cq_type},
+            {"data", data_obj}
+        });
+
+        // 更新下一次搜索的起始位置
+        last_pos = match_pos + match.length();
+    }
+
+    // 3. 处理尾部的纯文本段
+    if (last_pos < message.size())
+    {
+        std::string_view trailing_text = message.substr(last_pos);
+        if (!trailing_text.empty())
+        {
+            result.push_back({
+                {"type", "text"},
+                {"data", {{"text", unescape_cq(trailing_text)}}}
+                });
+        }
+    }
+
+    return result;
+}
+
+static drogon::Task<nlohmann::json> getFileInfo(std::string_view url)
+{
+    if (url.starts_with("file://"))
+    {
+#ifdef _WIN32
+        std::filesystem::path path = url.substr("file:///"sv.length());
+#else
+        std::filesystem::path path = url.substr("file://"sv.length());
+#endif // _WIN32
+        auto ifile = std::ifstream(path, std::ios::binary | std::ios::ate);
+        if (!ifile.is_open())
+        {
+            co_return {};
+        }
+        getQBotInstance();
+    }
+    else if (url.starts_with("http"))
+    {
+
+    }
+    else if (url.starts_with("base64://"))
+    {
+        auto data = drogon::utils::base64Decode(url.substr("base64://"sv.length()));
+    }
+
+    co_return{};
+}
+
+static drogon::Task<nlohmann::json> parseMessage(std::string_view message)
+{
+    auto segments = parse_cqcode(message);
+    auto ret = nlohmann::json{};
+    if (segments.size() == 1)
+    {
+        auto&& segment = *segments.begin();
+        auto type = segment["type"].get<std::string_view>();
+        auto&& data = segment["data"];
+        if (type == "text")
+        {
+            ret["msg_type"] = 0;
+            ret["content"] = data["text"];
+        }
+        else if (type == "image")
+        {
+            ret["msg_type"] = 7;
+            auto url = data["file"].get<std::string_view>();
+
+            ret["media"]["file_info"] = {};
+        }
+    }
+    else
+    {
+        auto content = std::string{};
+        for (auto&& segment : segments)
+        {
+            auto type = segment["type"].get<std::string_view>();
+            if (type == "text")
+            {
+                content += segment["data"]["text"];
+            }
+        }
+    }
+    
+    co_return {};
+}
+
 namespace onebot {
     namespace API {
         Result sendPrivateMsg(uint64_t user_id, const std::string& message, bool auto_escape)
         {
-            return getQBotInstance()->sendC2CMessageAsync({}, {});
+            auto payload = co_await parseMessage(message);
+            co_return co_await getQBotInstance()->sendC2CMessageAsync(payload, {});
         }
 
         Result sendGroupMsg(uint64_t group_id, const std::string& message, bool auto_escape)

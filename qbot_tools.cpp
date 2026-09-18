@@ -1,7 +1,43 @@
 #include "qbot_tools.h"
+#include <drogon/HttpAppFramework.h>
 #include <nlohmann/json.hpp>
 
 using namespace std::literals;
+
+// DNS 解析 Awaiter
+struct DnsResolveAwaiter
+{
+    std::string hostname;
+    trantor::InetAddress result_address;
+
+    // 总是先挂起协程，等待 DNS 回调完成
+    bool await_ready() const noexcept { return false; }
+
+    // 在这里调用原生的带有回调的 resolve 函数
+    void await_suspend(std::coroutine_handle<> handle) noexcept
+    {
+        auto& resolver = drogon::app().getResolver();
+        if (!resolver)
+        {
+            // 如果解析器未就绪，直接恢复协程（防止永久挂起）
+            handle.resume();
+            return;
+        }
+
+        resolver->resolve(hostname, [this, handle](const trantor::InetAddress& addr) mutable {
+            // 保存回调返回的结果
+            this->result_address = addr;
+            // 回调执行完成，恢复协程的运行
+            handle.resume();
+        });
+    }
+
+    // 协程恢复时，返回最终获得的 InetAddress 对象
+    trantor::InetAddress await_resume() noexcept
+    {
+        return std::move(result_address);
+    }
+};
 
 namespace tools {
     drogon::WebSocketClientPtr ConnectToWSServer(const std::string url, const WSMessageHandler& messageHandler, const WSClosedHandler& closedHandler, const drogon::WebSocketRequestCallback& requestCallback, const std::span<std::pair<std::string, std::string>>& headers)
@@ -20,6 +56,18 @@ namespace tools {
         }
         client->connectToServer(req, requestCallback);
         return client;
+    }
+
+    drogon::Task<bool> isIntranet(const std::string_view url)
+    {
+        auto sechmeLen = url.starts_with("http://"sv) ? "http://"sv.length() : "https://"sv.length();
+        auto posEnd1 = url.find("/", sechmeLen);
+        auto posEnd2 = url.find(":", sechmeLen);
+        auto pos = posEnd1 > posEnd2 ? posEnd2 : posEnd1;
+        auto host = url.substr(sechmeLen, pos - sechmeLen);
+        auto addr = co_await DnsResolveAwaiter{ std::string(host) };
+        bool ret = addr.isIntranetIp() ? true : (addr.isIpV6() ? addr.toIp() == "[::]" : addr.toIp() == "0.0.0.0");
+        co_return ret;
     }
 }
 

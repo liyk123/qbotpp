@@ -23,6 +23,8 @@ namespace tools {
     >;
 
     using JsonMethod = std::pair<nlohmann::json, HttpMethodVariant>;
+    
+    drogon::Task<bool> isIntranet(const std::string_view url);
 }
 
 namespace qbot {
