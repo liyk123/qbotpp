@@ -1,6 +1,9 @@
 #include "onebot_API.h"
 #include "qbot_Instance.h"
-#include <fstream>
+#include "qbot_types.h"
+#include "qbot_tools.h"
+#include <drogon/drogon.h>
+#include <nlohmann/json.hpp>
 
 using namespace std::literals;
 
@@ -125,8 +128,10 @@ static nlohmann::json parse_cqcode(std::string_view message)
     return result;
 }
 
-static drogon::Task<nlohmann::json> getFileInfo(std::string_view url)
+template<qbot::SceneType scene>
+static drogon::Task<nlohmann::json> getFileInfo(std::string_view url, qbot::FileType type, std::string_view sceneId)
 {
+    std::string data;
     if (url.starts_with("file://"))
     {
 #ifdef _WIN32
@@ -134,22 +139,53 @@ static drogon::Task<nlohmann::json> getFileInfo(std::string_view url)
 #else
         std::filesystem::path path = url.substr("file://"sv.length());
 #endif // _WIN32
-        auto ifile = std::ifstream(path, std::ios::binary | std::ios::ate);
+        std::stringstream ss;
+        auto ifile = std::ifstream(path, std::ios::binary);
         if (!ifile.is_open())
         {
             co_return {};
         }
-        getQBotInstance();
+        ifile >> ss.rdbuf();
+        data.assign(ss.str());
     }
-    else if (url.starts_with("http"))
+    else if (co_await tools::isIntranet(url))
     {
-
+        auto resp = co_await tools::SendHttpRequestAsync(url, {}, tools::HttpMethodType<drogon::Get>());
+        if (resp == nullptr || resp->statusCode() != drogon::k200OK)
+        {
+            co_return{};
+        }
+        data.assign(resp->body());
     }
     else if (url.starts_with("base64://"))
     {
-        auto data = drogon::utils::base64Decode(url.substr("base64://"sv.length()));
+        data.assign(drogon::utils::base64Decode(url.substr("base64://"sv.length())));
     }
 
+    if (!data.empty())
+    {
+        auto name = url.substr(url.find_last_of("/") + 1);
+        if constexpr (scene == qbot::c2c)
+        {
+            co_return co_await getQBotInstance()->uploadC2CBufferFileAsync(data, name, type, sceneId);
+        }
+        if constexpr (scene == qbot::group)
+        {
+            co_return co_await getQBotInstance()->uploadGroupBufferFileAsync(data, name, type, sceneId);
+        }
+    }
+
+    if (url.starts_with("http"))
+    {
+        if constexpr (scene == qbot::c2c)
+        {
+            co_return co_await getQBotInstance()->uploadC2CUrlFileAsync(url, type, sceneId);
+        }
+        if constexpr (scene == qbot::group)
+        {
+            co_return co_await getQBotInstance()->uploadGroupUrlFileAsync(url, type, sceneId);
+        }
+    }
     co_return{};
 }
 
@@ -171,7 +207,6 @@ static drogon::Task<nlohmann::json> parseMessage(std::string_view message)
         {
             ret["msg_type"] = 7;
             auto url = data["file"].get<std::string_view>();
-
             ret["media"]["file_info"] = {};
         }
     }

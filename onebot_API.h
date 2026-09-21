@@ -1,7 +1,6 @@
 #pragma once
-#include <nlohmann/json.hpp>
-#include <drogon/drogon.h>
-#include <string>
+#include <nlohmann/json_fwd.hpp>
+#include <drogon/utils/coroutine.h>
 
 namespace onebot {
     namespace API {

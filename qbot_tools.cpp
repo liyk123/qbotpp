@@ -1,5 +1,6 @@
 #include "qbot_tools.h"
 #include <drogon/HttpAppFramework.h>
+#include <drogon/HttpClient.h>
 #include <nlohmann/json.hpp>
 
 using namespace std::literals;
@@ -68,6 +69,19 @@ namespace tools {
         auto addr = co_await DnsResolveAwaiter{ std::string(host) };
         bool ret = addr.isIntranetIp() ? true : (addr.isIpV6() ? addr.toIp() == "[::]" : addr.toIp() == "0.0.0.0");
         co_return ret;
+    }
+
+    drogon::Task<drogon::HttpResponsePtr> SendHttpRequestAsync(const std::string& url, const nlohmann::json& data, const HttpMethodVariant method)
+    {
+        auto pos = url.find("/", url.starts_with("http://"sv) ? "http://"sv.length() : "https://"sv.length());
+        auto host = url.substr(0, pos);
+        auto path = url.substr(pos);
+        auto client = drogon::HttpClient::newHttpClient(host);
+        auto req = drogon::HttpRequest::newCustomHttpRequest(JsonMethod{ data, method });
+        req->setPath(path);
+        auto resp = co_await client->sendRequestCoro(req);
+        LOG_INFO << std::format("{} {} {} {}", req->methodString(), url, req->body(), resp->body());
+        co_return resp;
     }
 }
 

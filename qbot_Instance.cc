@@ -18,6 +18,7 @@ constexpr auto QBotSandboxUrl = "https://sandbox.api.sgroup.qq.com";
 constexpr auto GROUP_AND_C2C_EVENT = 1U << 25;
 constexpr auto GROUP_MEMBER_EVENT = 1U << 24;
 constexpr auto INTERACTION = 1U << 26;
+constexpr auto SCENE_TAG_LIST = std::array{ "users"sv,"groups"sv };
 
 enum class opcode : std::int32_t
 {
@@ -154,146 +155,146 @@ static nlohmann::json DispatchResumed(const nlohmann::json& data)
 }
 
 template<drogon::HttpMethod method = drogon::Post>
-static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data, const std::string& token)
+static drogon::Task<nlohmann::json> CallQBotApiAsync(const std::string& path, const nlohmann::json& data)
 {
     auto&& client = getInstanceImpl()->apiClient;
     auto req = drogon::HttpRequest::newCustomHttpRequest(JsonMethod{ data, HttpMethodType<method>{} });
     req->setPath(path);
-    req->addHeader("Authorization", "QQBot " + token);
+    req->addHeader("Authorization", "QQBot " + getInstanceImpl()->getAccessToken());
     drogon::HttpResponsePtr resp = co_await client->sendRequestCoro(req);
     SPDLOG_INFO(QBOT_TAG "{} {} {} {}", req->methodString(), path, req->body(), resp->body());
     co_return resp->as<nlohmann::json>();
 }
 
-static drogon::Task<nlohmann::json> SendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> SendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/users/{}/messages", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> SendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> SendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/messages", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> UploadC2CFileAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadC2CFileAsync(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/users/{}/files", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> UploadC2CPartPrepareAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadC2CPartPrepareAysnc(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/users/{}/upload_prepare", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> UploadC2CPartFinishAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadC2CPartFinishAysnc(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/users/{}/upload_part_finish", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> UploadGroupFileAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadGroupFileAsync(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/files", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> UploadGroupPartPrepareAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadGroupPartPrepareAysnc(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/upload_prepare", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> UploadGroupPartFinishAysnc(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> UploadGroupPartFinishAysnc(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/upload_part_finish", openId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
-static drogon::Task<nlohmann::json> DeleteGroupMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> DeleteGroupMessageAsync(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/messages/{}", openId, payload.get<std::string_view>());
-    co_return co_await CallQBotApiAsync<drogon::Delete>(path, {}, token);
+    co_return co_await CallQBotApiAsync<drogon::Delete>(path, {});
 }
 
-static drogon::Task<nlohmann::json> DeleteC2CMessageAsync(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> DeleteC2CMessageAsync(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/users/{}/messages/{}", openId, payload.get<std::string_view>());
-    co_return co_await CallQBotApiAsync<drogon::Delete>(path, {}, token);
+    co_return co_await CallQBotApiAsync<drogon::Delete>(path, {});
 }
 
-static drogon::Task<nlohmann::json> GetJoinRequestList(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> GetJoinRequestList(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/join_request_list", openId);
-    co_return co_await CallQBotApiAsync<drogon::Get>(path, payload, token);
+    co_return co_await CallQBotApiAsync<drogon::Get>(path, payload);
 }
 
-static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json& payload, const std::string& groupId, const std::string& userId, const std::string token)
+static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json& payload, const std::string& groupId, const std::string& userId)
 {
     auto path = std::format("/v2/groups/{}/approval_join_request/{}", groupId, userId);
-    co_return co_await CallQBotApiAsync(path, payload, token);
+    co_return co_await CallQBotApiAsync(path, payload);
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Post)
-static drogon::Task<nlohmann::json> RestrictChatSetting(const nlohmann::json& payload, const std::string& openId, const std::string token)
+static drogon::Task<nlohmann::json> RestrictChatSetting(const nlohmann::json& payload, const std::string& openId)
 {
     auto path = std::format("/v2/groups/{}/restrict_chat_setting", openId);
-    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload);
     co_return ret;
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Post)
-static drogon::Task<nlohmann::json> JoinApprovalStrategy(const nlohmann::json& payload, const std::string token)
+static drogon::Task<nlohmann::json> JoinApprovalStrategy(const nlohmann::json& payload)
 {
     auto path = "/v2/groups/join_approval_strategy";
-    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload);
     co_return ret;
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Patch || method == drogon::Delete)
-static drogon::Task<nlohmann::json> JoinApprovalStrategy(const nlohmann::json& payload, const std::string& strategyId, const std::string token)
+static drogon::Task<nlohmann::json> JoinApprovalStrategy(const nlohmann::json& payload, const std::string& strategyId)
 {
     auto path = std::format("/v2/groups/join_approval_strategy/{}", strategyId);
-    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload);
     co_return ret;
 }
 
 static drogon::Task<nlohmann::json> GetSelfDetails(const std::string token)
 {
-    co_return co_await CallQBotApiAsync<drogon::Get>("/users/@me", {}, token);
+    co_return co_await CallQBotApiAsync<drogon::Get>("/users/@me", {});
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Put)
-static drogon::Task<nlohmann::json> Menu(const nlohmann::json& payload, const std::string token)
+static drogon::Task<nlohmann::json> Menu(const nlohmann::json& payload)
 {
     auto path = "/v2/menu";
-    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload);
     co_return ret;
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Post)
-static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload, const std::string token)
+static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload)
 {
     auto path = "/v2/panels";
-    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload);
     co_return ret;
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Put || method == drogon::Delete)
-static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload, const std::string& panelId, const std::string token)
+static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload, const std::string& panelId)
 {
     auto path = std::format("/v2/panels/{}", panelId);
-    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<method>(path, payload);
     co_return ret;
 }
 
-static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json& payload, const std::string& panelId, const std::string token)
+static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json& payload, const std::string& panelId)
 {
     auto path = std::format("/v2/panels/{}/target", panelId);
-    nlohmann::json ret = co_await CallQBotApiAsync<drogon::Put>(path, payload, token);
+    nlohmann::json ret = co_await CallQBotApiAsync<drogon::Put>(path, payload);
     co_return ret;
 }
 
@@ -511,15 +512,16 @@ namespace qbot {
 
     drogon::Task<nlohmann::json> Instance::sendC2CMessageAsync(const nlohmann::json& payload, const std::string& openId) const
     {
-        return SendC2CMessageAsync(payload, openId, m_pImpl->getAccessToken());
+        return SendC2CMessageAsync(payload, openId);
     }
 
     drogon::Task<nlohmann::json> Instance::sendGroupMessageAsync(const nlohmann::json& payload, const std::string& openId) const
     {
-        return SendGroupMessageAsync(payload, openId, m_pImpl->getAccessToken());
+        return SendGroupMessageAsync(payload, openId);
     }
 
-    drogon::Task<nlohmann::json> Instance::uploadC2CBufferFileAsync(const std::string& buf, const std::string& name, const FileType type, const std::string& openId)
+    template<qbot::SceneType scene>
+    drogon::Task<nlohmann::json> UploadBufferFileAsync(const std::string& buf, const std::string& name, const FileType type, const std::string& openId)
     {
         auto prePayload = nlohmann::json{
             {"file_type", type},
@@ -529,24 +531,45 @@ namespace qbot {
             {"sha1", drogon::utils::getSha1(buf)},
             {"md5_10m", drogon::utils::getMd5(buf.substr(0,FILE_POS_MD5_10M))}
         };
-        auto preData = co_await UploadC2CPartPrepareAysnc(prePayload, openId, m_pImpl->getAccessToken());
+        auto preData = co_await UploadC2CPartPrepareAysnc(prePayload, openId);
         std::vector<drogon::Task<void>> tasks;
         std::size_t partPos = 0;
+        auto uploadId = preData["upload_id"].get<std::string>();
         for (auto&& part : preData["parts"])
         {
             auto blockSize = part["block_size"].get<std::size_t>();
-            auto task = [](const std::string& bufPart,const nlohmann::json& part) -> drogon::Task<> {
+            auto task = [](const std::string& bufPart, const nlohmann::json& part, const std::string& uploadId, const std::string& openId) -> drogon::Task<> {
                 auto url = part["presigned_url"].get<std::string>();
-                auto pos = url.find("/", url.starts_with("http://"sv) ? "http://"sv.length() : "https://"sv.length());
-                auto host = url.substr(0, pos);
-                auto path = url.substr(pos);
-                auto client = drogon::HttpClient::newHttpClient(host);
-                auto req = drogon::HttpRequest::newCustomHttpRequest(JsonMethod{ bufPart,HttpMethodType<drogon::Put>{} });
+                co_await tools::SendHttpRequestAsync(url, bufPart, HttpMethodType<drogon::Put>{});
+                auto partPayload = nlohmann::json{
+                    {"upload_id", uploadId},
+                    {"part_index", part["part_index"]},
+                    {"block_size", part["block_size"]},
+                    {"md5", drogon::utils::getMd5(bufPart)}
+                };
+                co_await UploadC2CPartFinishAysnc(partPayload, openId);
             };
-            tasks.push_back(task(buf.substr(partPos, blockSize), part));
+            tasks.emplace_back(std::move(task(buf.substr(partPos, blockSize), part, uploadId, openId)));
             partPos += blockSize;
         }
-        co_await drogon::when_all(tasks);
+        co_await drogon::when_all(std::move(tasks));
+        auto finishPayload = nlohmann::json{
+            {"file_type", type},
+            {"file_name", name},
+            {"upload_id", uploadId}
+        };
+        if constexpr (scene == c2c)
+        {
+            return UploadC2CFileAsync(finishPayload, openId);
+        }
+        if constexpr (scene == group)
+        {
+            return UploadGroupFileAsync(finishPayload, openId);
+        }
+    }
+
+    drogon::Task<nlohmann::json> Instance::uploadC2CBufferFileAsync(const std::string& buf, const std::string& name, const FileType type, const std::string& openId)
+    {
         co_return{};
     }
 
@@ -556,7 +579,21 @@ namespace qbot {
             {"file_type", type},
             {"url", url},
         };
-        return UploadC2CFileAsync(payload, openId, m_pImpl->getAccessToken());
+        return UploadC2CFileAsync(payload, openId);
+    }
+
+    drogon::Task<nlohmann::json> Instance::uploadGroupBufferFileAsync(const std::string& buf, const std::string& name, const FileType type, const std::string& openId)
+    {
+        co_return{};
+    }
+
+    drogon::Task<nlohmann::json> Instance::uploadGroupUrlFileAsync(const std::string& url, const FileType type, const std::string& openId) const
+    {
+        auto payload = nlohmann::json{
+            {"file_type", type},
+            {"url", url},
+        };
+        return UploadGroupFileAsync(payload, openId);
     }
 
     void Instance::export_functions()

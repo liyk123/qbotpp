@@ -21,10 +21,12 @@ namespace tools {
         HttpMethodType<drogon::Patch>,
         HttpMethodType<drogon::Put>
     >;
-
+    
     using JsonMethod = std::pair<nlohmann::json, HttpMethodVariant>;
     
     drogon::Task<bool> isIntranet(const std::string_view url);
+
+    drogon::Task<drogon::HttpResponsePtr> SendHttpRequestAsync(const std::string& url, const nlohmann::json& data, const HttpMethodVariant method);
 }
 
 namespace qbot {
