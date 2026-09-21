@@ -146,7 +146,7 @@ static nlohmann::json parseMessage(const nlohmann::json& data)
         });
         ret.insert(ret.end(), attachmentsArray.begin(), attachmentsArray.end());
     }
-    auto contentArray = parseContent(data["d"]["content"]);
+    auto contentArray = parseContent(data["d"]["content"].get<std::string_view>());
     ret.insert(ret.end(), contentArray.begin(), contentArray.end());
     return ret;
 }
