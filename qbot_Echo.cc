@@ -27,7 +27,7 @@ static nlohmann::json DispatchGroupMessageCreate(const nlohmann::json& data)
             {"msg_id", data["d"]["id"]}
         };
         auto& userOpenId = data["d"]["group_openid"];
-        co_await drogon::app().getPlugin<qbot::Instance>()->sendGroupMessageAsync(payload, userOpenId);
+        co_await drogon::app().getPlugin<qbot::Instance>()->sendGroupMessageAsync(std::move(payload), std::move(userOpenId));
     }));
     return {};
 }
@@ -41,7 +41,7 @@ static nlohmann::json DispatchGroupAtMessageCreate(const nlohmann::json& data)
             {"msg_id", data["d"]["id"]}
         };
         auto& userOpenId = data["d"]["group_openid"];
-        co_await drogon::app().getPlugin<qbot::Instance>()->sendGroupMessageAsync(payload, userOpenId);
+        co_await drogon::app().getPlugin<qbot::Instance>()->sendGroupMessageAsync(std::move(payload), std::move(userOpenId));
     }));
     return {};
 }
