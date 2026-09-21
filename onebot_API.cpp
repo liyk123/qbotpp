@@ -4,6 +4,7 @@
 #include "qbot_tools.h"
 #include <drogon/drogon.h>
 #include <nlohmann/json.hpp>
+#include <fstream>
 
 using namespace std::literals;
 
@@ -82,7 +83,7 @@ static nlohmann::json parse_cqcode(std::string_view message)
                 result.push_back({
                     {"type", "text"},
                     {"data", {{"text", unescape_cq(text_segment)}}}
-                    });
+                });
             }
         }
 
@@ -121,7 +122,7 @@ static nlohmann::json parse_cqcode(std::string_view message)
             result.push_back({
                 {"type", "text"},
                 {"data", {{"text", unescape_cq(trailing_text)}}}
-                });
+            });
         }
     }
 
@@ -129,7 +130,7 @@ static nlohmann::json parse_cqcode(std::string_view message)
 }
 
 template<qbot::SceneType scene>
-static drogon::Task<nlohmann::json> getFileInfo(std::string_view url, qbot::FileType type, std::string_view sceneId)
+static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::FileType type, const std::string& sceneId)
 {
     std::string data;
     if (url.starts_with("file://"))

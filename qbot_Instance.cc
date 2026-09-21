@@ -500,7 +500,7 @@ namespace qbot {
             {"sha1", drogon::utils::getSha1(buf)},
             {"md5_10m", drogon::utils::getMd5(buf.substr(0,FILE_POS_MD5_10M))}
         };
-        auto preData = co_await UploadPartPrepareAysnc<scene>(std::move(prePayload), openId);
+        nlohmann::json preData = co_await UploadPartPrepareAysnc<scene>(std::move(prePayload), openId);
         std::vector<drogon::Task<void>> tasks;
         std::size_t partPos = 0;
         auto uploadId = preData["upload_id"].get<std::string>();
