@@ -140,14 +140,14 @@ static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::Fi
 #else
         std::filesystem::path path = url.substr("file://"sv.length());
 #endif // _WIN32
-        std::stringstream ss;
-        auto ifile = std::ifstream(path, std::ios::binary);
-        if (!ifile.is_open())
+        auto ifile = std::ifstream(path, std::ios::binary | std::ios::ate);
+        if (!ifile)
         {
-            co_return {};
+            co_return{};
         }
-        ifile >> ss.rdbuf();
-        data.assign(ss.str());
+        data.resize(ifile.tellg());
+        ifile.seekg(0, std::ios::beg);
+        ifile.read(data.data(), data.size());
     }
     else if (co_await tools::isIntranet(url))
     {
@@ -168,11 +168,13 @@ static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::Fi
         auto name = url.substr(url.find_last_of("/") + 1);
         if constexpr (scene == qbot::c2c)
         {
-            co_return co_await getQBotInstance()->uploadC2CBufferFileAsync(data, name, type, sceneId);
+            nlohmann::json ret = co_await getQBotInstance()->uploadC2CBufferFileAsync(std::move(data), std::move(name), type, sceneId);
+            co_return ret;
         }
         if constexpr (scene == qbot::group)
         {
-            co_return co_await getQBotInstance()->uploadGroupBufferFileAsync(data, name, type, sceneId);
+            nlohmann::json ret = co_await getQBotInstance()->uploadGroupBufferFileAsync(std::move(data), std::move(name), type, sceneId);
+            co_return ret;
         }
     }
 
@@ -190,7 +192,16 @@ static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::Fi
     co_return{};
 }
 
-static drogon::Task<nlohmann::json> parseMessage(std::string_view message)
+static constexpr qbot::FileType toFileType(const std::string_view mediaType)
+{
+    return
+        mediaType == "image" ? qbot::picture :
+        mediaType == "video" ? qbot::video :
+        mediaType == "record" ? qbot::voice : qbot::file;
+}
+
+template<qbot::SceneType scene>
+static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const std::string& sceneId)
 {
     auto segments = parse_cqcode(message);
     auto ret = nlohmann::json{};
@@ -204,11 +215,16 @@ static drogon::Task<nlohmann::json> parseMessage(std::string_view message)
             ret["msg_type"] = 0;
             ret["content"] = data["text"];
         }
-        else if (type == "image")
+        else if (type == "image" || type == "video" || type == "record")
         {
             ret["msg_type"] = 7;
             auto url = data["file"].get<std::string_view>();
-            ret["media"]["file_info"] = {};
+            ret["media"]["file_info"] = co_await getFileInfo<scene>(url, toFileType(type), sceneId);
+        }
+        else if (type == "at")
+        {
+            ret["msg_type"] = 2;
+            ret["markdown"]["content"] = std::format("<qqbot-at-user id=\"{}\"/>",data["qq"].get<nlohmann::json::number_integer_t>());
         }
     }
     else
@@ -231,13 +247,14 @@ namespace onebot {
     namespace API {
         Result sendPrivateMsg(uint64_t user_id, const std::string& message, bool auto_escape)
         {
-            auto payload = co_await parseMessage(message);
-            co_return co_await getQBotInstance()->sendC2CMessageAsync(payload, {});
+            auto payload = co_await parseMessage<qbot::c2c>(message, {});
+            co_return co_await getQBotInstance()->sendC2CMessageAsync(std::move(payload), {});
         }
 
         Result sendGroupMsg(uint64_t group_id, const std::string& message, bool auto_escape)
         {
-            return getQBotInstance()->sendGroupMessageAsync({}, {});
+            auto payload = co_await parseMessage<qbot::group>(message, {});
+            co_return co_await getQBotInstance()->sendGroupMessageAsync(std::move(payload), {});
         }
 
         Result sendMsg(std::string message_type, uint64_t user_id, uint64_t group_id, const std::string& message, bool auto_escape)
