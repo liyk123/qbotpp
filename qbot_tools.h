@@ -78,14 +78,14 @@ namespace qbot {
         };
     };
 
-    struct SceneConstants
+    struct IdBucketConstants
     {
         std::uint32_t timeout;
-        std::uint32_t times;
+        std::uint32_t capacity‌;
     };
 
-    constexpr auto GroupConstants = SceneConstants{ 5 * 60,5 };
-    constexpr auto C2CConstants = SceneConstants{ 60 * 60,4 };
+    constexpr auto GroupIdBucketConstants = IdBucketConstants{ 5 * 60,5 };
+    constexpr auto C2CIdBucketConstants = IdBucketConstants{ 60 * 60,4 };
 }
 
 namespace drogon {

@@ -4,14 +4,16 @@
 #include "onebot_Event.h"
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
+#include <concurrentqueue/moodycamel/concurrentqueue.h>
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
 namespace QDT = qbot::DispatchType;
 using OnebotContext = std::tuple<std::string, std::string, trantor::TimerId>;
 using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
-using IdCache = drogon::CacheMap<std::uint32_t, std::pair<std::string, std::uint32_t>>;
-using IdDequeCache = drogon::CacheMap<std::uint64_t, std::deque<std::uint32_t>>;
+using IdCache = drogon::CacheMap<std::uint32_t, std::string>;
+using IdQueue = moodycamel::ConcurrentQueue<std::uint32_t>;
+using IdQueueCache = drogon::CacheMap<std::uint64_t, IdQueue>;
 namespace OneEvent = onebot::Event;
 
 struct onebot::Instance::Impl
@@ -19,7 +21,7 @@ struct onebot::Instance::Impl
     ClientCache clientCache{ drogon::app().getLoop() };
     IdCache eventIdCache{ drogon::app().getLoop() };
     IdCache messageIdCache{ drogon::app().getLoop() };
-    IdDequeCache idDequeCache{ drogon::app().getLoop() };
+    IdQueueCache idQueueCache{ drogon::app().getLoop() };
     std::vector<std::string> urlArray{};
 
     Impl() = default;
@@ -29,10 +31,11 @@ struct onebot::Instance::Impl
     ~Impl() = default;
 
     void dispatch(const std::shared_ptr<Event::Variant>& data);
-    void cacheEventId(std::uint64_t sceneId, std::uint32_t eventId, std::string_view eventIdStr, qbot::SceneConstants constants);
-    void cacheMessageId(std::uint64_t sceneId, std::uint32_t messageId, std::string_view messageIdStr, qbot::SceneConstants constants);
+    template<qbot::IdBucketConstants constants>
+    void cacheId(std::uint64_t sceneId, std::uint32_t id, const std::string& idStr, IdCache& idcahe);
     template<OneEvent::Concept T>
     void cacheId(T&& data);
+    std::string getCacheId(const std::uint64_t sceneId);
 };
 
 onebot::Instance* getInstance()
@@ -203,7 +206,12 @@ namespace onebot {
         m_pImpl->dispatch(data);
     }
 
-    void Instance::Impl::dispatch(const std::shared_ptr<Event::Variant>& data)
+    std::string Instance::getCacheId(const std::uint64_t sceneId)
+    {
+        return m_pImpl->getCacheId(sceneId);
+    }
+
+    inline void Instance::Impl::dispatch(const std::shared_ptr<Event::Variant>& data)
     {
         for (auto&& url : urlArray)
         {
@@ -217,57 +225,57 @@ namespace onebot {
         }
     }
 
-    void Instance::Impl::cacheEventId(std::uint64_t sceneId, std::uint32_t eventId, std::string_view eventIdStr, qbot::SceneConstants constants)
+    template<qbot::IdBucketConstants constants>
+    inline void Instance::Impl::cacheId(std::uint64_t sceneId, std::uint32_t id, const std::string& idStr, IdCache& idcahe)
     {
-        if (!idDequeCache.find(sceneId))
+        if (!idQueueCache.find(sceneId))
         {
-            idDequeCache.insert(sceneId, {});
+            idQueueCache.insert(sceneId, IdQueue{});
         }
-        idDequeCache.modify(sceneId, [sceneId, eventId, this, idStr = std::string(eventIdStr), constants](std::deque<std::uint32_t>& val) {
-            val.push_back(eventId);
-            eventIdCache.insert(eventId, { idStr, constants.times }, constants.timeout, [sceneId, this] {
-                idDequeCache.modify(sceneId, [](std::deque<std::uint32_t>& val) {
-                    val.pop_front();
-                });
-            });
-        });
-    }
-
-    void Instance::Impl::cacheMessageId(std::uint64_t sceneId, std::uint32_t messageId, std::string_view messageIdStr, qbot::SceneConstants constants)
-    {
-        if (!idDequeCache.find(sceneId))
-        {
-            idDequeCache.insert(sceneId, {});
-        }
-        idDequeCache.modify(sceneId, [sceneId, messageId, this, idStr = std::string(messageIdStr), constants](std::deque<std::uint32_t>& val) {
-            val.push_back(messageId);
-            messageIdCache.insert(messageId, { idStr, constants.times }, constants.timeout, [sceneId, this] {
-                idDequeCache.modify(sceneId, [](std::deque<std::uint32_t>& val) {
-                    val.pop_front();
-                });
-            });
+        idQueueCache.modify(sceneId, [sceneId, id, this, &idStr, &idcahe](IdQueue& val) {
+            auto bucket = std::array<std::uint32_t, constants.capacity‌>{ id };
+            val.enqueue_bulk(bucket.begin(), constants.capacity‌);
+            idcahe.insert(id, idStr, constants.timeout);
         });
     }
 
     template<Event::Concept T>
-    void Instance::Impl::cacheId(T&& data)
+    inline void Instance::Impl::cacheId(T&& data)
     {
         using TX = std::decay_t<T>;
         if constexpr (std::same_as<TX, Event::PrivateMsg>)
         {
-            cacheMessageId(data.user_id, data.message_id, data.inter_ext.message_openid, qbot::C2CConstants);
+            cacheId<qbot::C2CIdBucketConstants>(data.user_id, data.message_id, data.inter_ext.message_openid, messageIdCache);
         }
         else if constexpr (std::same_as<TX, Event::GroupMsg>)
         {
-            cacheMessageId(data.group_id, data.message_id, data.inter_ext.message_openid, qbot::GroupConstants);
+            cacheId<qbot::GroupIdBucketConstants>(data.group_id, data.message_id, data.inter_ext.message_openid, messageIdCache);
         }
         else if constexpr (std::same_as<TX, Event::FriendAddNotice>)
         {
-            cacheEventId(data.user_id, data.inter_ext.event_id, data.inter_ext.event_openid, qbot::C2CConstants);
+            cacheId<qbot::C2CIdBucketConstants>(data.user_id, data.inter_ext.event_id, data.inter_ext.event_openid, eventIdCache);
         }
         else if constexpr (std::same_as<TX, Event::GroupIncreaseNotice>)
         {
-            cacheEventId(data.group_id, data.inter_ext.event_id, data.inter_ext.event_openid, qbot::GroupConstants);
+            cacheId<qbot::GroupIdBucketConstants>(data.group_id, data.inter_ext.event_id, data.inter_ext.event_openid, eventIdCache);
         }
+    }
+
+    inline std::string Instance::Impl::getCacheId(const std::uint64_t sceneId)
+    {
+        auto ret = std::string{};
+        idQueueCache.modify(sceneId, [this,&ret](IdQueue& idQueue) {
+            auto val = std::uint32_t{};
+            if (!idQueue.try_dequeue(val))
+            {
+                return;
+            }
+            if (eventIdCache.findAndFetch(val, ret) || messageIdCache.findAndFetch(val, ret))
+            {
+                return;
+            }
+            SPDLOG_DEBUG(ONEBOT_TAG "Empty ID cache! Will cost active capacity!");
+        });
+        return ret;
     }
 }

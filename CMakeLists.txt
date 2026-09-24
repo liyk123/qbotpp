@@ -35,6 +35,7 @@ find_package(Drogon CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(fixed_string CONFIG REQUIRED)
+find_package(concurrentqueue CONFIG REQUIRED)
 
 
 macro(get_git_hash _git_hash)
@@ -102,6 +103,7 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE nlohmann_json::nlohmann_json
     PRIVATE xxHash::xxhash
     PRIVATE fixed_string::fixed_string
+    PRIVATE concurrentqueue::concurrentqueue
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)

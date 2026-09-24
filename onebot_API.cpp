@@ -218,7 +218,7 @@ static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const
         else if (type == "image" || type == "video" || type == "record")
         {
             ret["msg_type"] = 7;
-            auto url = data["file"].get<std::string_view>();
+            auto url = data["file"].get<std::string>();
             ret["media"]["file_info"] = co_await getFileInfo<scene>(url, toFileType(type), sceneId);
         }
         else if (type == "at")

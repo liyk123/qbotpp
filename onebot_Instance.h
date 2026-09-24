@@ -12,6 +12,7 @@ namespace onebot
         void shutdown() override;
     public:
         void dispatch(const std::shared_ptr<void> &data) const;
+        std::string getCacheId(const std::uint64_t sceneId);
         struct Impl;
         std::unique_ptr<Impl> m_pImpl;
     };

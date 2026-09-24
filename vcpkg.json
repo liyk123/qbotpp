@@ -14,6 +14,7 @@
       "name": "trantor",
       "features": [ "spdlog" ]
     },
-    "fixed-string"
+    "fixed-string",
+    "concurrentqueue"
   ]
 }
