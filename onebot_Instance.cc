@@ -5,6 +5,7 @@
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include "Idmap.h"
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
@@ -14,7 +15,10 @@ using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
 using IdCache = drogon::CacheMap<std::uint32_t, std::string>;
 using IdQueue = moodycamel::ConcurrentQueue<std::uint32_t>;
 using IdQueueCache = drogon::CacheMap<std::uint64_t, IdQueue>;
+using drogon_model::sqlite3::Idmap;
 namespace OneEvent = onebot::Event;
+
+constexpr auto CREATE_IDMAP_SQL = std::string_view{ R"(CREATE TABLE IF NOT EXISTS "idmap" ("openid" TEXT NOT NULL PRIMARY KEY, "scene" INTEGER NOT NULL, "hash64" TEXT NOT NULL);)" };
 
 struct onebot::Instance::Impl
 {
@@ -38,7 +42,7 @@ struct onebot::Instance::Impl
     std::string getCacheId(const std::uint64_t sceneId);
 };
 
-onebot::Instance* getInstance()
+static onebot::Instance* getInstance()
 {
     return drogon::app().getPlugin<onebot::Instance>();
 }
@@ -190,6 +194,7 @@ namespace onebot {
     void Instance::initAndStart(const Json::Value& config)
     {
         SPDLOG_WARN(ONEBOT_TAG "init");
+        drogon::app().getDbClient()->execSqlSync(std::string(CREATE_IDMAP_SQL));
         m_pImpl = std::make_unique<Impl>();
         InitAndConnect(config);
         RegisterDispatchActions();
@@ -209,6 +214,14 @@ namespace onebot {
     std::string Instance::getCacheId(const std::uint64_t sceneId)
     {
         return m_pImpl->getCacheId(sceneId);
+    }
+
+    std::string Instance::getOpenId(const std::uint64_t sceneId)
+    {
+        drogon::orm::CoroMapper<Idmap> mapper(drogon::app().getDbClient());
+        auto idStr = std::format("{:x}", sceneId);
+        auto id = mapper.findOne(drogon::orm::Criteria(Idmap::Cols::_hash64, drogon::orm::CompareOperator::EQ, idStr));
+        return {};
     }
 
     inline void Instance::Impl::dispatch(const std::shared_ptr<Event::Variant>& data)

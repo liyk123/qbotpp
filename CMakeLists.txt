@@ -29,6 +29,8 @@ set(FILE_LIST
     "qbot_Echo.cc"
     "onebot_Instance.h"
     "onebot_Instance.cc"
+    "Idmap.h"
+    "Idmap.cc"
 )
 
 find_package(Drogon CONFIG REQUIRED)
