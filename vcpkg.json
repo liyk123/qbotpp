@@ -15,6 +15,7 @@
       "features": [ "spdlog" ]
     },
     "fixed-string",
+    "date",
     "concurrentqueue"
   ]
 }

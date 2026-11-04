@@ -81,7 +81,7 @@ namespace qbot {
     struct IdBucketConstants
     {
         std::uint32_t timeout;
-        std::uint32_t capacity‌;
+        std::uint32_t capacity;
     };
 
     constexpr auto GroupIdBucketConstants = IdBucketConstants{ 5 * 60,5 };

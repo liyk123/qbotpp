@@ -246,8 +246,8 @@ namespace onebot {
             idQueueCache.insert(sceneId, IdQueue{});
         }
         idQueueCache.modify(sceneId, [sceneId, id, this, &idStr, &idcahe](IdQueue& val) {
-            auto bucket = std::array<std::uint32_t, constants.capacity‌>{ id };
-            val.enqueue_bulk(bucket.begin(), constants.capacity‌);
+            auto bucket = std::array<std::uint32_t, constants.capacity>{ id };
+            val.enqueue_bulk(bucket.begin(), constants.capacity);
             idcahe.insert(id, idStr, constants.timeout);
         });
     }

@@ -92,8 +92,9 @@ drogon::HttpRequestPtr toRequestPtr(T&& obj)
     auto req = drogon::HttpRequest::newHttpRequest();
     req->setContentTypeCode(drogon::CT_APPLICATION_JSON);
     std::visit([&](auto&& x) {
-        req->setMethod(x.value);
-        if constexpr (x.value == drogon::Get)
+        using M = std::decay_t<decltype(x)>;
+        req->setMethod(M::value);
+        if constexpr (M::value == drogon::Get)
         {
             for (auto&& [key, val] : data.items())
             {

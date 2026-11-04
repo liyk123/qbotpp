@@ -18,7 +18,7 @@ static void initEnv()
     spdlog::default_logger()->set_pattern(LogPattern);
     trantor::Logger::enableSpdLog(spdlog::default_logger());
     drogon::app().loadConfigFile("config.yml");
-    spdlog::default_logger()->set_level(spdlog::level::level_enum{ trantor::Logger::logLevel() });
+    spdlog::default_logger()->set_level(static_cast<spdlog::level::level_enum>(trantor::Logger::logLevel()));
     std::signal(SIGTERM, [](int) {
         drogon::app().getLoop()->runInLoop([] { drogon::app().quit(); });
     });

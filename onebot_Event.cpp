@@ -4,6 +4,7 @@
 #include <xxhash.h>
 #include <drogon/HttpAppFramework.h>
 #include <regex>
+#include <date/date.h>
 
 constexpr XXH64_hash_t OPID_HASH_SEED = 'opid';
 constexpr XXH32_hash_t MGID_HASH_SEED = 'mgid';
@@ -17,7 +18,7 @@ static onebot::Instance* getInstance()
 static std::uint64_t to_timestamp(const std::string t)
 {
     std::chrono::sys_time<std::chrono::seconds> tp;
-    std::istringstream(t) >> std::chrono::parse("%Y-%m-%dT%H:%M:%S%Ez", tp);
+    std::istringstream(t) >> date::parse("%Y-%m-%dT%H:%M:%S%Ez", tp);
     return tp.time_since_epoch().count();
 }
 
@@ -274,7 +275,7 @@ namespace onebot {
                 .inter_ext = {
                     .group_openid{groupId},
                     .user_openid{userId},
-                    .event_id{::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED)},
+                    .event_id = ::XXH32(eventId.data(), eventId.size(), EVID_HASH_SEED),
                     .event_openid{eventId}
                 }
             };
