@@ -247,7 +247,7 @@ namespace onebot {
                 .raw_message = toRaw(msgArray),
                 .sender = {
                     .nickname{data["d"]["author"]["username"]},
-                    .role{data["d"]["author"]["member_role"]}
+                    .role = data["d"]["author"]["member_role"]
                 },
                 .inter_ext = {
                     .user_openid{userId},

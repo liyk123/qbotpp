@@ -29,7 +29,7 @@ struct onebot::Instance::Impl
     std::vector<std::string> urlArray{};
 
     Impl() = default;
-    Impl(Impl&&) = default;
+    Impl(Impl&&) = delete;
     Impl(Impl&) = delete;
     Impl(const Impl&) = delete;
     ~Impl() = default;
@@ -103,9 +103,9 @@ static void RequestCallback(const std::string url,const std::string token, const
     }
     SPDLOG_INFO("{} is connected!", url);
     Send(client->getConnection(), OneEvent::LifecycleEvent{
-        .sub_type{OneEvent::LifecycleEvent::CONNECT},
-        .time{(std::uint64_t)std::time(nullptr)},
-        .self_id{std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId())}
+        .sub_type = OneEvent::LifecycleEvent::CONNECT,
+        .time = (std::uint64_t)std::time(nullptr),
+        .self_id = std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId())
     });
     auto timerId = client->getLoop()->runEvery(std::chrono::seconds(5), [url]() {
         auto connection = getInstance()->m_pImpl->clientCache[url]->getConnection();
@@ -114,13 +114,13 @@ static void RequestCallback(const std::string url,const std::string token, const
             return;
         }
         Send(connection, OneEvent::HeartbeatEvent{
-            .time{(std::uint64_t)std::time(nullptr)},
-            .self_id{std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId())},
+            .time = (std::uint64_t)std::time(nullptr),
+            .self_id = std::stoull(drogon::app().getPlugin<qbot::Instance>()->getAppId()),
             .status{
-                .online{true},
-                .good{true}
+                .online = true,
+                .good = true
             },
-            .interval{5000}
+            .interval = 5000
         });
     });
     client->getConnection()->setContext(std::make_shared<OnebotContext>(url, token, timerId));
