@@ -1,4 +1,5 @@
 #include "onebot_API.h"
+#include "onebot_Instance.h"
 #include "qbot_Instance.h"
 #include "qbot_types.h"
 #include "qbot_tools.h"
@@ -16,6 +17,11 @@ static nlohmann::json ref_message(nlohmann::json data)
 static qbot::Instance* getQBotInstance()
 {
     return drogon::app().getPlugin<qbot::Instance>();
+}
+
+static onebot::Instance* getOnebotInstance()
+{
+    return drogon::app().getPlugin<onebot::Instance>();
 }
 
 // 解码 CQ 码中的转义字符
@@ -130,7 +136,7 @@ static nlohmann::json parse_cqcode(std::string_view message)
 }
 
 template<qbot::SceneType scene>
-static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::FileType type, const std::string& sceneId)
+static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::FileType type, const std::string& openId)
 {
     std::string data;
     if (url.starts_with("file://"))
@@ -168,12 +174,12 @@ static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::Fi
         auto name = url.substr(url.find_last_of("/") + 1);
         if constexpr (scene == qbot::c2c)
         {
-            nlohmann::json ret = co_await getQBotInstance()->uploadC2CBufferFileAsync(std::move(data), std::move(name), type, sceneId);
+            nlohmann::json ret = co_await getQBotInstance()->uploadC2CBufferFileAsync(std::move(data), std::move(name), type, openId);
             co_return ret;
         }
         if constexpr (scene == qbot::group)
         {
-            nlohmann::json ret = co_await getQBotInstance()->uploadGroupBufferFileAsync(std::move(data), std::move(name), type, sceneId);
+            nlohmann::json ret = co_await getQBotInstance()->uploadGroupBufferFileAsync(std::move(data), std::move(name), type, openId);
             co_return ret;
         }
     }
@@ -182,11 +188,11 @@ static drogon::Task<nlohmann::json> getFileInfo(const std::string& url, qbot::Fi
     {
         if constexpr (scene == qbot::c2c)
         {
-            co_return co_await getQBotInstance()->uploadC2CUrlFileAsync(url, type, sceneId);
+            co_return co_await getQBotInstance()->uploadC2CUrlFileAsync(url, type, openId);
         }
         if constexpr (scene == qbot::group)
         {
-            co_return co_await getQBotInstance()->uploadGroupUrlFileAsync(url, type, sceneId);
+            co_return co_await getQBotInstance()->uploadGroupUrlFileAsync(url, type, openId);
         }
     }
     co_return{};
@@ -201,7 +207,7 @@ static constexpr qbot::FileType toFileType(const std::string_view mediaType)
 }
 
 template<qbot::SceneType scene>
-static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const std::string& sceneId)
+static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const std::string& openId)
 {
     auto segments = parse_cqcode(message);
     auto ret = nlohmann::json{};
@@ -219,7 +225,7 @@ static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const
         {
             ret["msg_type"] = 7;
             auto url = data["file"].get<std::string>();
-            ret["media"]["file_info"] = co_await getFileInfo<scene>(url, toFileType(type), sceneId);
+            ret["media"]["file_info"] = co_await getFileInfo<scene>(url, toFileType(type), openId);
         }
         else if (type == "at")
         {
@@ -247,14 +253,16 @@ namespace onebot {
     namespace API {
         Result sendPrivateMsg(uint64_t user_id, const std::string& message, bool auto_escape)
         {
-            auto payload = co_await parseMessage<qbot::c2c>(message, {});
-            co_return co_await getQBotInstance()->sendC2CMessageAsync(std::move(payload), {});
+            auto openId = co_await getOnebotInstance()->getOpenIdAsync(user_id);
+            auto payload = co_await parseMessage<qbot::c2c>(message, openId);
+            co_return co_await getQBotInstance()->sendC2CMessageAsync(std::move(payload), openId);
         }
 
         Result sendGroupMsg(uint64_t group_id, const std::string& message, bool auto_escape)
         {
-            auto payload = co_await parseMessage<qbot::group>(message, {});
-            co_return co_await getQBotInstance()->sendGroupMessageAsync(std::move(payload), {});
+            auto openId = co_await getOnebotInstance()->getOpenIdAsync(group_id);
+            auto payload = co_await parseMessage<qbot::group>(message, openId);
+            co_return co_await getQBotInstance()->sendGroupMessageAsync(std::move(payload), openId);
         }
 
         Result sendMsg(std::string message_type, uint64_t user_id, uint64_t group_id, const std::string& message, bool auto_escape)

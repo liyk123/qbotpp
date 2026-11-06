@@ -216,12 +216,12 @@ namespace onebot {
         return m_pImpl->getCacheId(sceneId);
     }
 
-    std::string Instance::getOpenId(const std::uint64_t sceneId)
+    drogon::Task<std::string> Instance::getOpenIdAsync(const std::uint64_t sceneId)
     {
         drogon::orm::CoroMapper<Idmap> mapper(drogon::app().getDbClient());
         auto idStr = std::format("{:x}", sceneId);
-        auto id = mapper.findOne(drogon::orm::Criteria(Idmap::Cols::_hash64, drogon::orm::CompareOperator::EQ, idStr));
-        return {};
+        auto result = co_await mapper.findOne(drogon::orm::Criteria(Idmap::Cols::_hash64, drogon::orm::CompareOperator::EQ, idStr));
+        co_return *result.getOpenid();
     }
 
     inline void Instance::Impl::dispatch(const std::shared_ptr<Event::Variant>& data)
