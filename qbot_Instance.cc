@@ -267,6 +267,27 @@ static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json& pay
     return CallQBotApiAsync<drogon::Put>(std::move(path), std::move(payload));
 }
 
+static drogon::Task<nlohmann::json> PrepareMediaUpload(const nlohmann::json& payload)
+{
+    return CallQBotApiAsync("/v2/media-images/prepare", std::move(payload));
+}
+
+static drogon::Task<nlohmann::json> CompleteMediaUpload(const nlohmann::json& payload)
+{
+    return CallQBotApiAsync("/v2/media-images/complete", payload);
+}
+
+static drogon::Task<nlohmann::json> GetMediaImages(const nlohmann::json& payload)
+{
+    return CallQBotApiAsync<drogon::Get>("/v2/media-images", payload);
+}
+
+static drogon::Task<nlohmann::json> DeleteMediaImage(const std::string& imageId)
+{
+    auto path = std::format("/v2/media-images/{}/delete", imageId);
+    return CallQBotApiAsync<drogon::Delete>(path, {});
+}
+
 static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSocketConnectionPtr& connection)
 {
     auto type = data["t"].get<std::string_view>();
