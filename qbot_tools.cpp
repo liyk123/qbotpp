@@ -101,6 +101,10 @@ drogon::HttpRequestPtr toRequestPtr(T&& obj)
                 req->setParameter(key, val);
             }
         }
+        else if constexpr (M::value == drogon::Put)
+        {
+            req->setBody(data.is_string() ? data.template get<std::string>() : data.dump());
+        }
         else
         {
             req->setBody(data.dump());

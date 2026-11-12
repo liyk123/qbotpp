@@ -13,5 +13,14 @@ namespace qbot {
         group,
         guild
     };
-    static constexpr auto FILE_POS_MD5_10M = 10002432;
+    enum MsgType
+    {
+        content = 0,
+        markdown = 2,
+        input_notify = 6,
+        media = 7,
+        card = 8
+    };
+    constexpr auto FILE_POS_MD5_10M = 10002432;
+    constexpr auto MEDIA_IMAGE_MAX_SIZE = 10 * 1024 * 1024;
 }

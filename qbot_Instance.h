@@ -34,6 +34,8 @@ namespace qbot {
 
         drogon::Task<nlohmann::json> uploadGroupUrlFileAsync(const std::string url, const FileType type, const std::string openId) const;
 
+        drogon::Task<nlohmann::json> uploadMediaImageAsync(const std::string buf, const std::string name, const std::string mimeType);
+
         struct Impl;
         std::unique_ptr<Impl> m_pImpl;
     private:

@@ -582,6 +582,31 @@ namespace qbot {
         return UploadUrlFileAsync<group>(std::move(url), type, std::move(openId));
     }
 
+    drogon::Task<nlohmann::json> Instance::uploadMediaImageAsync(const std::string buf, const std::string name, const std::string mimeType)
+    {
+        if (buf.size() > MEDIA_IMAGE_MAX_SIZE)
+        {
+            co_return {};
+        }
+        auto prepareData = co_await PrepareMediaUpload(nlohmann::json{
+            {"file_name", name},
+            {"file_size", buf.size()},
+            {"content_type", mimeType},
+            {"md5", drogon::utils::getMd5(buf)},
+            {"sha1", drogon::utils::getSha1(buf)},
+        });
+        auto url = prepareData.value("presigned_url", std::string{});
+        if (url.empty())
+        {
+            co_return {};
+        }
+        auto resp = co_await tools::SendHttpRequestAsync(url, buf, HttpMethodType<drogon::Put>{});
+        co_return co_await CompleteMediaUpload(nlohmann::json{
+            {"upload_id", prepareData["upload_id"]},
+            {"md5", resp->headers().at("ETag")},
+        });
+    }
+
     void Instance::export_functions()
     {
         registerDispatchAction<DispatchType::C2CMessageCreate>({});
