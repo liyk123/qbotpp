@@ -26,7 +26,7 @@ namespace tools {
     
     drogon::Task<bool> isIntranet(const std::string_view url);
 
-    drogon::Task<drogon::HttpResponsePtr> SendHttpRequestAsync(const std::string& url, const nlohmann::json& data, const HttpMethodVariant method);
+    drogon::Task<drogon::HttpResponsePtr> SendHttpRequestAsync(const std::string url, const nlohmann::json data, const HttpMethodVariant method);
 }
 
 namespace qbot {

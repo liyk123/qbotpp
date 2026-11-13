@@ -207,7 +207,7 @@ static drogon::Task<nlohmann::json> GetJoinRequestList(const nlohmann::json payl
     return CallQBotApiAsync<drogon::Get>(std::move(path), std::move(payload));
 }
 
-static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json& payload, const std::string& groupId, const std::string& userId)
+static drogon::Task<nlohmann::json> ApprovalJoinRequest(const nlohmann::json payload, const std::string groupId, const std::string userId)
 {
     auto path = std::format("/v2/groups/{}/approval_join_request/{}", groupId, userId);
     return CallQBotApiAsync(std::move(path), std::move(payload));
@@ -255,37 +255,37 @@ static drogon::Task<nlohmann::json> Panels(const nlohmann::json payload)
 }
 
 template<drogon::HttpMethod method> requires (method == drogon::Get || method == drogon::Put || method == drogon::Delete)
-static drogon::Task<nlohmann::json> Panels(const nlohmann::json& payload, const std::string& panelId)
+static drogon::Task<nlohmann::json> Panels(const nlohmann::json payload, const std::string panelId)
 {
     auto path = std::format("/v2/panels/{}", panelId);
     return CallQBotApiAsync<method>(std::move(path), std::move(payload));
 }
 
-static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json& payload, const std::string& panelId)
+static drogon::Task<nlohmann::json> UpdatePanelsTarget(const nlohmann::json payload, const std::string panelId)
 {
     auto path = std::format("/v2/panels/{}/target", panelId);
     return CallQBotApiAsync<drogon::Put>(std::move(path), std::move(payload));
 }
 
-static drogon::Task<nlohmann::json> PrepareMediaUpload(const nlohmann::json& payload)
+static drogon::Task<nlohmann::json> PrepareMediaUpload(const nlohmann::json payload)
 {
     return CallQBotApiAsync("/v2/media-images/prepare", std::move(payload));
 }
 
-static drogon::Task<nlohmann::json> CompleteMediaUpload(const nlohmann::json& payload)
+static drogon::Task<nlohmann::json> CompleteMediaUpload(const nlohmann::json payload)
 {
-    return CallQBotApiAsync("/v2/media-images/complete", payload);
+    return CallQBotApiAsync("/v2/media-images/complete", std::move(payload));
 }
 
-static drogon::Task<nlohmann::json> GetMediaImages(const nlohmann::json& payload)
+static drogon::Task<nlohmann::json> GetMediaImages(const nlohmann::json payload)
 {
-    return CallQBotApiAsync<drogon::Get>("/v2/media-images", payload);
+    return CallQBotApiAsync<drogon::Get>("/v2/media-images", std::move(payload));
 }
 
-static drogon::Task<nlohmann::json> DeleteMediaImage(const std::string& imageId)
+static drogon::Task<nlohmann::json> DeleteMediaImage(const std::string imageId)
 {
     auto path = std::format("/v2/media-images/{}/delete", imageId);
-    return CallQBotApiAsync<drogon::Delete>(path, {});
+    return CallQBotApiAsync<drogon::Delete>(std::move(path), {});
 }
 
 static void OnDispatchReceived(const nlohmann::json& data, const drogon::WebSocketConnectionPtr& connection)
@@ -600,11 +600,29 @@ namespace qbot {
         {
             co_return {};
         }
-        auto resp = co_await tools::SendHttpRequestAsync(url, buf, HttpMethodType<drogon::Put>{});
+        auto resp = co_await tools::SendHttpRequestAsync(std::move(url), std::move(buf), HttpMethodType<drogon::Put>{});
         co_return co_await CompleteMediaUpload(nlohmann::json{
             {"upload_id", prepareData["upload_id"]},
             {"md5", resp->headers().at("ETag")},
         });
+    }
+
+    drogon::Task<nlohmann::json> Instance::getMediaImages()
+    {
+        auto data = co_await GetMediaImages({});
+        auto ret = data["images"];
+        for (auto i = data.value("next_cursor", std::string{}); !i.empty(); i = data.value("next_cursor", std::string{}))
+        {
+            data = co_await GetMediaImages({{"cursor", i}});
+            auto&& images = data["images"];
+            ret.insert(ret.end(), images.begin(), images.end());
+        }
+        co_return ret;
+    }
+
+    drogon::Task<nlohmann::json> Instance::delteMediaImage(const std::string imageId)
+    {
+        return DeleteMediaImage(std::move(imageId));
     }
 
     void Instance::export_functions()

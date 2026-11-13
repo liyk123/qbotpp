@@ -36,6 +36,10 @@ namespace qbot {
 
         drogon::Task<nlohmann::json> uploadMediaImageAsync(const std::string buf, const std::string name, const std::string mimeType);
 
+        drogon::Task<nlohmann::json> getMediaImages();
+
+        drogon::Task<nlohmann::json> delteMediaImage(const std::string imageId);
+
         struct Impl;
         std::unique_ptr<Impl> m_pImpl;
     private:
