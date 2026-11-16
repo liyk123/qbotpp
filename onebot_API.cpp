@@ -206,44 +206,82 @@ static constexpr qbot::FileType toFileType(const std::string_view mediaType)
         mediaType == "record" ? qbot::voice : qbot::file;
 }
 
-template<qbot::SceneType scene>
+static qbot::MsgType toMsgType(std::string_view messageType)
+{
+    return 
+        messageType == "text" ? qbot::content : 
+        messageType == "image" || messageType == "video" || messageType == "record" ? qbot::media :
+        messageType == "at" || messageType == "markdown" ? qbot::markdown :
+        messageType == "card" ? qbot::card : qbot::content;
+}
+
+template <qbot::SceneType scene>
+static drogon::Task<nlohmann::json> setMessageContent(const nlohmann::json segment,  const std::string openId)
+{
+    auto msg = nlohmann::json{};
+    auto type = segment["type"].get<std::string_view>();
+    auto&& data = segment["data"];
+    msg["msg_type"] = toMsgType(type);
+
+    if (type == "text")
+    {
+        msg["content"] = data["text"];
+    }
+    else if (type == "image" || type == "video" || type == "record")
+    {
+        auto url = data["file"].get<std::string>();
+        msg["media"]["file_info"] = co_await getFileInfo<scene>(url, toFileType(type), openId);
+    }
+    else if (type == "at")
+    {
+        msg["markdown"]["content"] = std::format("<qqbot-at-user id=\"{}\"/>", data.value("qq", nlohmann::json::number_integer_t{}));
+    }
+    else if (type == "markdown" || type == "card")
+    {
+        msg[type] = nlohmann::json::parse(drogon::utils::base64Decode(data.value("data", std::string_view{})));
+    }
+    co_return msg;
+}
+
+template <qbot::SceneType scene>
 static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const std::string& openId)
 {
     auto segments = parse_cqcode(message);
     auto ret = nlohmann::json{};
     if (segments.size() == 1)
     {
-        auto&& segment = *segments.begin();
-        auto type = segment["type"].get<std::string_view>();
-        auto&& data = segment["data"];
-        if (type == "text")
-        {
-            ret["msg_type"] = 0;
-            ret["content"] = data["text"];
-        }
-        else if (type == "image" || type == "video" || type == "record")
-        {
-            ret["msg_type"] = 7;
-            auto url = data["file"].get<std::string>();
-            ret["media"]["file_info"] = co_await getFileInfo<scene>(url, toFileType(type), openId);
-        }
-        else if (type == "at")
-        {
-            ret["msg_type"] = 2;
-            ret["markdown"]["content"] = std::format("<qqbot-at-user id=\"{}\"/>",data["qq"].get<nlohmann::json::number_integer_t>());
-        }
+        ret = co_await setMessageContent<scene>(std::move(*segments.begin()), std::move(openId));
     }
     else
     {
         auto content = std::string{};
+        ret["msg_type"] = qbot::markdown;
         for (auto&& segment : segments)
         {
             auto type = segment["type"].get<std::string_view>();
+            auto&& data = segment["data"];
             if (type == "text")
             {
                 content += segment["data"]["text"];
             }
+            else if (type == "image" || type == "video" || type == "record")
+            {
+
+            } 
+            else if (type == "at")
+            {
+
+            }
+            else if (type == "markdown")
+            {
+
+            }
+            else if (type == "card")
+            {
+
+            }
         }
+
     }
     
     co_return {};

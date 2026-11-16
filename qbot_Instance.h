@@ -26,6 +26,10 @@ namespace qbot {
 
         drogon::Task<nlohmann::json> sendGroupMessageAsync(const nlohmann::json payload, const std::string openId) const;
 
+        drogon::Task<nlohmann::json> deleteC2CMessageAysnc(const std::string messageId, const std::string openId);
+
+        drogon::Task<nlohmann::json> deleteGroupMessageAysnc(const std::string messageId, const std::string openId);
+
         drogon::Task<nlohmann::json> uploadC2CBufferFileAsync(const std::string buf, const std::string name, const FileType type, const std::string openId);
 
         drogon::Task<nlohmann::json> uploadGroupBufferFileAsync(const std::string buf, const std::string name, const FileType type, const std::string openId);

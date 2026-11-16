@@ -510,6 +510,16 @@ namespace qbot {
         return SendMessageAsync<group>(std::move(payload), std::move(openId));
     }
 
+    drogon::Task<nlohmann::json> Instance::deleteC2CMessageAysnc(const std::string messageId, const std::string openId)
+    {
+        return DeleteMessageAsync<c2c>(std::move(messageId), std::move(openId));
+    }
+
+    drogon::Task<nlohmann::json> Instance::deleteGroupMessageAysnc(const std::string messageId, const std::string openId)
+    {
+        return DeleteMessageAsync<group>(std::move(messageId), std::move(openId));
+    }
+
     template<qbot::SceneType scene>
     static drogon::Task<nlohmann::json> UploadBufferFileAsync(const std::string buf, const std::string name, const FileType type, const std::string openId)
     {
