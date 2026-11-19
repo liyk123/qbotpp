@@ -1,11 +1,12 @@
 #include "onebot_API.h"
+#include <drogon/drogon.h>
+#include <spdlog/spdlog.h>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include "onebot_Instance.h"
 #include "qbot_Instance.h"
-#include "qbot_types.h"
 #include "qbot_tools.h"
-#include <drogon/drogon.h>
-#include <nlohmann/json.hpp>
-#include <fstream>
+#include "qbot_types.h"
 
 using namespace std::literals;
 
@@ -216,10 +217,10 @@ static qbot::MsgType toMsgType(std::string_view messageType)
 }
 
 template <qbot::SceneType scene>
-static drogon::Task<nlohmann::json> setMessageContent(const nlohmann::json segment,  const std::string openId)
+static drogon::Task<nlohmann::json> getMessageContent(const nlohmann::json& segment, const std::string& openId)
 {
     auto msg = nlohmann::json{};
-    auto type = segment["type"].get<std::string_view>();
+    auto type = segment.value("type", "text"sv);
     auto&& data = segment["data"];
     msg["msg_type"] = toMsgType(type);
 
@@ -234,57 +235,76 @@ static drogon::Task<nlohmann::json> setMessageContent(const nlohmann::json segme
     }
     else if (type == "at")
     {
-        msg["markdown"]["content"] = std::format("<qqbot-at-user id=\"{}\"/>", data.value("qq", nlohmann::json::number_integer_t{}));
+        msg["markdown"]["content"] = std::format("<qqbot-at-user id=\"{}\"/>", data.value("qq", 0LL));
     }
     else if (type == "markdown" || type == "card")
     {
-        msg[type] = nlohmann::json::parse(drogon::utils::base64Decode(data.value("data", std::string_view{})));
+        msg.merge_patch(nlohmann::json::parse(drogon::utils::base64Decode(data.value("data", std::string_view{}))));
     }
     co_return msg;
 }
 
-template <qbot::SceneType scene>
-static drogon::Task<nlohmann::json> parseMessage(std::string_view message, const std::string& openId)
+drogon::Task<nlohmann::json> mergeMessageSegments(const nlohmann::json_abi_v3_12_0::json& segments)
 {
-    auto segments = parse_cqcode(message);
     auto ret = nlohmann::json{};
-    if (segments.size() == 1)
+    auto content = std::string{};
+    ret["msg_type"] = qbot::markdown;
+    for (auto&& segment : segments)
     {
-        ret = co_await setMessageContent<scene>(std::move(*segments.begin()), std::move(openId));
-    }
-    else
-    {
-        auto content = std::string{};
-        ret["msg_type"] = qbot::markdown;
-        for (auto&& segment : segments)
+        auto type = segment.value("type", ""sv);
+        auto&& data = segment["data"];
+        if (type == "text")
         {
-            auto type = segment["type"].get<std::string_view>();
-            auto&& data = segment["data"];
-            if (type == "text")
+            content += segment["data"]["text"];
+        }
+        else if (type == "image")
+        {
+            auto url = data.value("file", "");
+            if ((url.starts_with("http"sv) && !co_await tools::isIntranet(url)))
             {
-                content += segment["data"]["text"];
-            }
-            else if (type == "image" || type == "video" || type == "record")
-            {
-
-            } 
-            else if (type == "at")
-            {
-
-            }
-            else if (type == "markdown")
-            {
-
-            }
-            else if (type == "card")
-            {
-
+                content += std::format(" ![img]({}) ", url);
             }
         }
-
+        else if (type == "at")
+        {
+            content += std::format("<qqbot-at-user id=\"{}\"/>", data.value("qq", 0LL));
+        }
+        else if (type == "markdown")
+        {
+            auto mdData = nlohmann::json::parse(drogon::utils::base64Decode(data.value("data", std::string_view{})));
+            content += mdData["markdown"].value("content", ""sv);
+            if (mdData.contains("keyboard"))
+            {
+                ret["keyboard"] = mdData["keyboard"];
+            }
+        }
+        else if (type == "card")
+        {
+            auto cardData = nlohmann::json::parse(drogon::utils::base64Decode(data.value("data", std::string_view{})));
+            auto&& cardContent = cardData["card"]["content"];
+            content += std::format(
+                "## {}\n{}\n![img]({})\n{}\n",
+                cardContent.value("title", ""sv),
+                cardContent.value("description", ""sv),
+                cardContent.value("pic_url", "sv"),
+                cardContent.value("url", ""sv));
+        }
+        else
+        {
+            SPDLOG_WARN("{} is ignored !", segment.dump());
+        }
     }
-    
-    co_return {};
+    ret["markdown"]["content"] = content;
+    co_return ret;
+}
+
+template <qbot::SceneType scene>
+static drogon::Task<nlohmann::json> parseMessage(const std::string message, const std::string openId)
+{
+    auto segments = parse_cqcode(message);
+    co_return segments.size() == 1
+        ? co_await getMessageContent<scene>(segments.front(), openId)
+        : co_await mergeMessageSegments(segments);
 }
 
 namespace onebot {
