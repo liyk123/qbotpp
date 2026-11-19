@@ -521,7 +521,7 @@ namespace qbot {
     }
 
     template <qbot::SceneType scene>
-    drogon::Task<> UploadSinglePartAsync(const std::string bufPart, const nlohmann::json& part, const std::string& uploadId, const std::string& openId)
+    drogon::Task<> UploadBufferPartAsync(const std::string bufPart, const nlohmann::json& part, const std::string& uploadId, const std::string& openId)
     {
         auto url = part["presigned_url"].get<std::string>();
         co_await tools::SendHttpRequestAsync(url, bufPart, HttpMethodType<drogon::Put>{});
@@ -552,7 +552,7 @@ namespace qbot {
         for (auto&& part : preData["parts"])
         {
             auto blockSize = part["block_size"].get<std::size_t>();
-            tasks.emplace_back(UploadSinglePartAsync<scene>(buf.substr(partPos, blockSize), part, uploadId, openId));
+            tasks.emplace_back(UploadBufferPartAsync<scene>(buf.substr(partPos, blockSize), part, uploadId, openId));
             partPos += blockSize;
         }
         co_await drogon::when_all(std::move(tasks));
