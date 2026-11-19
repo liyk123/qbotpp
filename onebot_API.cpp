@@ -259,7 +259,7 @@ drogon::Task<nlohmann::json> mergeMessageSegments(const nlohmann::json_abi_v3_12
         }
         else if (type == "image")
         {
-            auto url = data.value("file", "");
+            auto url = data.value("file", ""sv);
             if ((url.starts_with("http"sv) && !co_await tools::isIntranet(url)))
             {
                 content += std::format(" ![img]({}) ", url);
@@ -286,7 +286,7 @@ drogon::Task<nlohmann::json> mergeMessageSegments(const nlohmann::json_abi_v3_12
                 "## {}\n{}\n![img]({})\n{}\n",
                 cardContent.value("title", ""sv),
                 cardContent.value("description", ""sv),
-                cardContent.value("pic_url", "sv"),
+                cardContent.value("pic_url", ""sv),
                 cardContent.value("url", ""sv));
         }
         else
@@ -313,14 +313,14 @@ namespace onebot {
         {
             auto openId = co_await getOnebotInstance()->getOpenIdAsync(user_id);
             auto payload = co_await parseMessage<qbot::c2c>(message, openId);
-            co_return co_await getQBotInstance()->sendC2CMessageAsync(std::move(payload), openId);
+            co_return co_await getQBotInstance()->sendC2CMessageAsync(payload, openId);
         }
 
         Result sendGroupMsg(uint64_t group_id, const std::string& message, bool auto_escape)
         {
             auto openId = co_await getOnebotInstance()->getOpenIdAsync(group_id);
             auto payload = co_await parseMessage<qbot::group>(message, openId);
-            co_return co_await getQBotInstance()->sendGroupMessageAsync(std::move(payload), openId);
+            co_return co_await getQBotInstance()->sendGroupMessageAsync(payload, openId);
         }
 
         Result sendMsg(std::string message_type, uint64_t user_id, uint64_t group_id, const std::string& message, bool auto_escape)
