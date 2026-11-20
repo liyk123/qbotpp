@@ -23,4 +23,5 @@ namespace qbot {
     };
     constexpr auto FILE_POS_MD5_10M = 10002432;
     constexpr auto MEDIA_IMAGE_MAX_SIZE = 10 * 1024 * 1024;
+    constexpr auto DELETE_MESSAGE_TIMEOUT = 2 * 60;
 }

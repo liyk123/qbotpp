@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include "Idmap.h"
+#include "qbot_types.h"
 
 #define ONEBOT_TAG "\033[36mOneBot\033[0m "
 
@@ -15,6 +16,7 @@ using ClientCache = drogon::CacheMap<std::string, drogon::WebSocketClientPtr>;
 using IdCache = drogon::CacheMap<std::uint32_t, std::string>;
 using IdQueue = moodycamel::ConcurrentQueue<std::uint32_t>;
 using IdQueueCache = drogon::CacheMap<std::uint64_t, IdQueue>;
+using MessageIdMap = drogon::CacheMap<std::uint32_t, std::string>;
 using drogon_model::sqlite3::Idmap;
 namespace OneEvent = onebot::Event;
 
@@ -22,10 +24,12 @@ constexpr auto CREATE_IDMAP_SQL = std::string_view{ R"(CREATE TABLE IF NOT EXIST
 
 struct onebot::Instance::Impl
 {
-    ClientCache clientCache{ drogon::app().getLoop() };
-    IdCache eventIdCache{ drogon::app().getLoop() };
-    IdCache messageIdCache{ drogon::app().getLoop() };
-    IdQueueCache idQueueCache{ drogon::app().getLoop() };
+    ClientCache clientCache{drogon::app().getLoop()};
+    IdCache eventIdCache{drogon::app().getLoop()};
+    IdCache messageIdCache{drogon::app().getLoop()};
+    IdQueueCache idQueueCache{drogon::app().getLoop()};
+    MessageIdMap groupIdMap{drogon::app().getLoop()};
+    MessageIdMap userIdMap{drogon::app().getLoop()};
     std::vector<std::string> urlArray{};
 
     Impl() = default;
@@ -39,7 +43,10 @@ struct onebot::Instance::Impl
     void cacheId(std::uint64_t sceneId, std::uint32_t id, const std::string& idStr, IdCache& idcahe);
     template<OneEvent::Concept T>
     void cacheId(T&& data);
-    std::string getCacheId(const std::uint64_t sceneId);
+    std::string tryDequeueCacheId(const std::uint64_t sceneId);
+    std::string findAndFetchMessageId(const std::uint32_t messageId);
+    void mapMessageIdGroupId(const std::uint32_t messageId, const std::string& groupId);
+    void mapMessageIdUserId(const std::uint32_t messageId, const std::string& userId);
 };
 
 static onebot::Instance* getInstance()
@@ -211,9 +218,9 @@ namespace onebot {
         m_pImpl->dispatch(data);
     }
 
-    std::string Instance::getCacheId(const std::uint64_t sceneId)
+    std::string Instance::tryDequeueCacheId(const std::uint64_t sceneId)
     {
-        return m_pImpl->getCacheId(sceneId);
+        return m_pImpl->tryDequeueCacheId(sceneId);
     }
 
     drogon::Task<std::string> Instance::getOpenIdAsync(const std::uint64_t sceneId)
@@ -222,6 +229,21 @@ namespace onebot {
         auto idStr = std::format("{:x}", sceneId);
         auto result = co_await mapper.findOne(drogon::orm::Criteria(Idmap::Cols::_hash64, drogon::orm::CompareOperator::EQ, idStr));
         co_return *result.getOpenid();
+    }
+
+    std::string Instance::findAndFetchMessageId(const std::uint32_t messageId)
+    {
+        return m_pImpl->findAndFetchMessageId(messageId);
+    }
+
+    void Instance::mapMessageIdGroupId(const std::uint32_t messageId, const std::string& groupId)
+    {
+        m_pImpl->mapMessageIdGroupId(messageId, groupId);
+    }
+    
+    void Instance::mapMessageIdUserId(const std::uint32_t messageId, const std::string& userId)
+    {
+        m_pImpl->mapMessageIdUserId(messageId, userId);
     }
 
     inline void Instance::Impl::dispatch(const std::shared_ptr<Event::Variant>& data)
@@ -262,6 +284,7 @@ namespace onebot {
         }
         else if constexpr (std::same_as<TX, Event::GroupMsg>)
         {
+            mapMessageIdGroupId(data.message_id, data.inter_ext.group_openid);
             cacheId<qbot::GroupIdBucketConstants>(data.group_id, data.message_id, data.inter_ext.message_openid, messageIdCache);
         }
         else if constexpr (std::same_as<TX, Event::FriendAddNotice>)
@@ -274,10 +297,10 @@ namespace onebot {
         }
     }
 
-    inline std::string Instance::Impl::getCacheId(const std::uint64_t sceneId)
+    inline std::string Instance::Impl::tryDequeueCacheId(const std::uint64_t sceneId)
     {
         auto ret = std::string{};
-        idQueueCache.modify(sceneId, [this,&ret](IdQueue& idQueue) {
+        idQueueCache.modify(sceneId, [this, &ret](IdQueue& idQueue) {
             auto val = std::uint32_t{};
             if (!idQueue.try_dequeue(val))
             {
@@ -290,5 +313,22 @@ namespace onebot {
             SPDLOG_DEBUG(ONEBOT_TAG "Empty ID cache! Will cost active capacity!");
         });
         return ret;
+    }
+
+    std::string Instance::Impl::findAndFetchMessageId(const std::uint32_t messageId)
+    {
+        auto ret = std::string{};
+        messageIdCache.findAndFetch(messageId, ret);
+        return ret;
+    }
+
+    void Instance::Impl::mapMessageIdGroupId(const std::uint32_t messageId, const std::string& groupId)
+    {
+        groupIdMap.insert(messageId, groupId, qbot::DELETE_MESSAGE_TIMEOUT);
+    }
+
+    void Instance::Impl::mapMessageIdUserId(const std::uint32_t messageId, const std::string& userId)
+    {
+        groupIdMap.insert(messageId, userId, qbot::DELETE_MESSAGE_TIMEOUT);
     }
 }

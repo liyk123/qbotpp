@@ -313,14 +313,17 @@ namespace onebot {
         {
             auto openId = co_await getOnebotInstance()->getOpenIdAsync(user_id);
             auto payload = co_await parseMessage<qbot::c2c>(message, openId);
-            co_return co_await getQBotInstance()->sendC2CMessageAsync(payload, openId);
+            auto ret = co_await getQBotInstance()->sendC2CMessageAsync(payload, openId);
+
+            co_return ret;
         }
 
         Result sendGroupMsg(uint64_t group_id, const std::string& message, bool auto_escape)
         {
             auto openId = co_await getOnebotInstance()->getOpenIdAsync(group_id);
             auto payload = co_await parseMessage<qbot::group>(message, openId);
-            co_return co_await getQBotInstance()->sendGroupMessageAsync(payload, openId);
+            auto ret = co_await getQBotInstance()->sendGroupMessageAsync(payload, openId);
+            co_return ret;
         }
 
         Result sendMsg(std::string message_type, uint64_t user_id, uint64_t group_id, const std::string& message, bool auto_escape)
@@ -338,6 +341,8 @@ namespace onebot {
 
         Result deleteMsg(uint32_t message_id)
         {
+            auto openMsgId = getOnebotInstance()->findAndFetchMessageId(message_id);
+            co_await getQBotInstance()->deleteC2CMessageAysnc(openMsgId, {});
             co_return {};
         }
 

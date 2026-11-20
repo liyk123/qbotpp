@@ -84,7 +84,7 @@ namespace qbot {
         std::uint32_t capacity;
     };
 
-    constexpr auto GroupIdBucketConstants = IdBucketConstants{ 5 * 60,5 };
+    constexpr auto GroupIdBucketConstants = IdBucketConstants{ 60 * 60,50 };
     constexpr auto C2CIdBucketConstants = IdBucketConstants{ 60 * 60,4 };
 }
 
